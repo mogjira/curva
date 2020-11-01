@@ -50,7 +50,8 @@ static void initOffscreenFrameBuffer(void)
             depthFormat,
             VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
             VK_IMAGE_USAGE_SAMPLED_BIT,
-            VK_IMAGE_ASPECT_DEPTH_BIT);
+            VK_IMAGE_ASPECT_DEPTH_BIT,
+            VK_SAMPLE_COUNT_1_BIT);
 
     offscreenFrameBuffer.colorAttachment = tanto_v_CreateImageAndSampler(
             TANTO_WINDOW_WIDTH, TANTO_WINDOW_HEIGHT, 
@@ -58,10 +59,11 @@ static void initOffscreenFrameBuffer(void)
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | 
             VK_IMAGE_USAGE_SAMPLED_BIT,
             VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_SAMPLE_COUNT_1_BIT,
             VK_FILTER_NEAREST);
     //
     // seting render pass and depth attachment
-    offscreenFrameBuffer.pRenderPass = &offscreenRenderPass;
+    offscreenFrameBuffer.renderPass = offscreenRenderPass;
 
     const VkImageView attachments[] = {offscreenFrameBuffer.colorAttachment.view, offscreenFrameBuffer.depthAttachment.view};
 
@@ -70,7 +72,7 @@ static void initOffscreenFrameBuffer(void)
         .layers = 1,
         .height = TANTO_WINDOW_HEIGHT,
         .width  = TANTO_WINDOW_WIDTH,
-        .renderPass = *offscreenFrameBuffer.pRenderPass,
+        .renderPass = offscreenFrameBuffer.renderPass,
         .attachmentCount = 2,
         .pAttachments = attachments
     };
@@ -348,7 +350,7 @@ void r_UpdateRenderCommands(void)
         .clearValueCount = 2,
         .pClearValues = clears,
         .renderArea = {{0, 0}, {TANTO_WINDOW_WIDTH, TANTO_WINDOW_HEIGHT}},
-        .renderPass =  *offscreenFrameBuffer.pRenderPass,
+        .renderPass =  offscreenFrameBuffer.renderPass,
         .framebuffer = offscreenFrameBuffer.handle,
     };
 
@@ -357,8 +359,8 @@ void r_UpdateRenderCommands(void)
         .clearValueCount = 1,
         .pClearValues = clears,
         .renderArea = {{0, 0}, {TANTO_WINDOW_WIDTH, TANTO_WINDOW_HEIGHT}},
-        .renderPass =  *frame->renderPass,
-        .framebuffer = frame->frameBuffer 
+        .renderPass =  frame->frameBuffer.renderPass,
+        .framebuffer = frame->frameBuffer.handle
     };
 
     mainRender(&frame->commandBuffer, &rpassOffscreen);
