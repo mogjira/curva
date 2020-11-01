@@ -17,7 +17,10 @@
 
 #define SPVDIR "/home/michaelb/dev/curva/shaders/spv"
 
-static Tanto_R_FrameBuffer  offscreenFrameBuffer;
+static Tanto_R_Image renderTargetColor;
+static Tanto_R_Image renderTargetDepth;
+
+static VkFramebuffer framebuffers[TANTO_FRAME_COUNT];
 
 static Tanto_V_BufferRegion uniformBufferRegion;
 static Tanto_V_BufferRegion drawCallParmsRegion;
@@ -25,61 +28,89 @@ static Tanto_V_BufferRegion drawCallParmsRegion;
 static Tanto_R_Primitive points;
 static Tanto_R_Primitive border;
 
+static const VkSampleCountFlags SAMPLE_COUNT = VK_SAMPLE_COUNT_8_BIT;
+
 typedef enum {
     R_PIPE_LINES,
     R_PIPE_POINTS,
-    R_PIPE_POST
+//    R_PIPE_POST
 } R_PipelineId;
 
 typedef enum {
     R_PIPE_LAYOUT_MAIN,
-    R_PIPE_LAYOUT_POST
+//    R_PIPE_LAYOUT_POST
 } R_PipelineLayoutId;
 
 typedef enum {
     R_DESC_SET_MAIN,
-    R_DESC_SET_POST
+    //R_DESC_SET_POST
 } R_DescriptorSetId;
 
 // TODO: we should implement a way to specify the offscreen renderpass format at initialization
-static void initOffscreenFrameBuffer(void)
+static void initOffscreenRenderTargets(void)
 {
     //initDepthAttachment();
-    offscreenFrameBuffer.depthAttachment = tanto_v_CreateImage(
+    renderTargetDepth = tanto_v_CreateImage(
             TANTO_WINDOW_WIDTH, TANTO_WINDOW_HEIGHT,
             depthFormat,
             VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
             VK_IMAGE_USAGE_SAMPLED_BIT,
             VK_IMAGE_ASPECT_DEPTH_BIT,
-            VK_SAMPLE_COUNT_1_BIT);
+            SAMPLE_COUNT);
 
-    offscreenFrameBuffer.colorAttachment = tanto_v_CreateImageAndSampler(
+    renderTargetColor = tanto_v_CreateImageAndSampler(
             TANTO_WINDOW_WIDTH, TANTO_WINDOW_HEIGHT, 
-            offscreenColorFormat,
+            swapFormat,
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | 
             VK_IMAGE_USAGE_SAMPLED_BIT,
             VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_SAMPLE_COUNT_1_BIT,
+            SAMPLE_COUNT,
             VK_FILTER_NEAREST);
     //
     // seting render pass and depth attachment
-    offscreenFrameBuffer.renderPass = offscreenRenderPass;
+    //offscreenFrameBuffer.renderPass = offscreenRenderPass;
 
-    const VkImageView attachments[] = {offscreenFrameBuffer.colorAttachment.view, offscreenFrameBuffer.depthAttachment.view};
+    //const VkImageView attachments[] = {offscreenFrameBuffer.colorAttachment.view, offscreenFrameBuffer.depthAttachment.view};
 
-    VkFramebufferCreateInfo framebufferInfo = {
-        .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-        .layers = 1,
-        .height = TANTO_WINDOW_HEIGHT,
-        .width  = TANTO_WINDOW_WIDTH,
-        .renderPass = offscreenFrameBuffer.renderPass,
-        .attachmentCount = 2,
-        .pAttachments = attachments
-    };
+    //VkFramebufferCreateInfo framebufferInfo = {
+    //    .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+    //    .layers = 1,
+    //    .height = TANTO_WINDOW_HEIGHT,
+    //    .width  = TANTO_WINDOW_WIDTH,
+    //    .renderPass = offscreenFrameBuffer.renderPass,
+    //    .attachmentCount = 2,
+    //    .pAttachments = attachments
+    //};
 
-    V_ASSERT( vkCreateFramebuffer(device, &framebufferInfo, NULL, &offscreenFrameBuffer.handle) );
+    //V_ASSERT( vkCreateFramebuffer(device, &framebufferInfo, NULL, &offscreenFrameBuffer.handle) );
 
-    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, &offscreenFrameBuffer.colorAttachment);
+    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, &renderTargetColor);
+}
+
+static void initFrameBuffers(void)
+{
+    for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
+    {
+        // being able to view the attachment order in the renderpass creation
+        // is a good reason to pass that information to the renderpass creation
+        // from this module. currently need to flip over to tanto/r_render.c to make sure
+        // i get the order correct
+        VkImageView attachments[3] = {
+            renderTargetColor.view, renderTargetDepth.view, frames[i].swapImage.view
+        };
+
+        VkFramebufferCreateInfo ci = {
+            .height = TANTO_WINDOW_HEIGHT,
+            .width = TANTO_WINDOW_WIDTH,
+            .renderPass = msaaRenderPass,
+            .layers = 1,
+            .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+            .attachmentCount = 3,
+            .pAttachments = attachments,
+        };
+
+        V_ASSERT( vkCreateFramebuffer(device, &ci, NULL, &framebuffers[i]) );
+    }
 }
 
 // descriptors that do only need to have update called once and can be updated on initialization
@@ -104,12 +135,6 @@ static void updateStaticDescriptors(void)
         .range  = uniformBufferRegion.size
     };
 
-    VkDescriptorImageInfo imageInfo = {
-        .imageLayout = offscreenFrameBuffer.colorAttachment.layout,
-        .imageView   = offscreenFrameBuffer.colorAttachment.view,
-        .sampler     = offscreenFrameBuffer.colorAttachment.sampler
-    };
-
     VkWriteDescriptorSet writes[] = {{
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstArrayElement = 0,
@@ -118,14 +143,6 @@ static void updateStaticDescriptors(void)
         .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
         .pBufferInfo = &uboInfo
-    },{
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstArrayElement = 0,
-        .dstSet = descriptorSets[R_DESC_SET_POST],
-        .dstBinding = 0,
-        .descriptorCount = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-        .pImageInfo = &imageInfo
     }};
 
     vkUpdateDescriptorSets(device, TANTO_ARRAY_SIZE(writes), writes, 0, NULL);
@@ -145,26 +162,12 @@ static void InitPipelines(void)
             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             .stageFlags = VK_SHADER_STAGE_VERTEX_BIT
         }}
-    },{
-        .id = R_DESC_SET_POST,
-        .bindingCount = 1,
-        .bindings = {{
-            .descriptorCount = 1,
-            .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
-        }}
     }};
 
     const Tanto_R_PipelineLayout pipelayouts[] = {{
         .id = R_PIPE_LAYOUT_MAIN, 
         .descriptorSetCount = 1, 
         .descriptorSetIds = {R_DESC_SET_MAIN},
-        .pushConstantCount = 0,
-        .pushConstantsRanges = {}
-    },{
-        .id = R_PIPE_LAYOUT_POST,
-        .descriptorSetCount = 1,
-        .descriptorSetIds = {R_DESC_SET_POST},
         .pushConstantCount = 0,
         .pushConstantsRanges = {}
     }};
@@ -174,9 +177,10 @@ static void InitPipelines(void)
         .type     = TANTO_R_PIPELINE_RASTER_TYPE,
         .layoutId = R_PIPE_LAYOUT_MAIN,
         .payload.rasterInfo = {
-            .renderPassType = TANTO_R_RENDER_PASS_OFFSCREEN_TYPE, 
+            .renderPass = msaaRenderPass, 
             .vertexDescription = tanto_r_GetVertexDescription3D_Simple(),
             .polygonMode = VK_POLYGON_MODE_LINE,
+            .sampleCount = VK_SAMPLE_COUNT_8_BIT,
             .vertShader = SPVDIR"/template-vert.spv",
             .fragShader = SPVDIR"/template-frag.spv"
         }
@@ -185,19 +189,12 @@ static void InitPipelines(void)
         .type     = TANTO_R_PIPELINE_RASTER_TYPE,
         .layoutId = R_PIPE_LAYOUT_MAIN,
         .payload.rasterInfo = {
-            .renderPassType = TANTO_R_RENDER_PASS_OFFSCREEN_TYPE, 
+            .renderPass = msaaRenderPass, 
             .vertexDescription = tanto_r_GetVertexDescription3D_Simple(),
             .polygonMode = VK_POLYGON_MODE_POINT,
+            .sampleCount = VK_SAMPLE_COUNT_8_BIT,
             .vertShader = SPVDIR"/template-vert.spv",
             .fragShader = SPVDIR"/template-frag.spv"
-        }
-    },{
-        .id       = R_PIPE_POST,
-        .type     = TANTO_R_PIPELINE_POSTPROC_TYPE,
-        .layoutId = R_PIPE_LAYOUT_POST,
-        .payload.rasterInfo = {
-            .renderPassType = TANTO_R_RENDER_PASS_SWAPCHAIN_TYPE, 
-            .fragShader = SPVDIR"/post-frag.spv"
         }
     }};
 
@@ -258,20 +255,20 @@ static void mainRender(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInf
 
 static void postProc(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo* rpassInfo)
 {
-    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[R_PIPE_POST]);
+    //vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[R_PIPE_POST]);
 
-    vkCmdBindDescriptorSets(
-        *cmdBuf, 
-        VK_PIPELINE_BIND_POINT_GRAPHICS, 
-        pipelineLayouts[R_PIPE_LAYOUT_POST], 
-        0, 1, &descriptorSets[R_DESC_SET_POST],
-        0, NULL);
+    //vkCmdBindDescriptorSets(
+    //    *cmdBuf, 
+    //    VK_PIPELINE_BIND_POINT_GRAPHICS, 
+    //    pipelineLayouts[R_PIPE_LAYOUT_POST], 
+    //    0, 1, &descriptorSets[R_DESC_SET_POST],
+    //    0, NULL);
 
-    vkCmdBeginRenderPass(*cmdBuf, rpassInfo, VK_SUBPASS_CONTENTS_INLINE);
+    //vkCmdBeginRenderPass(*cmdBuf, rpassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-    vkCmdDraw(*cmdBuf, 3, 1, 0, 0);
+    //vkCmdDraw(*cmdBuf, 3, 1, 0, 0);
 
-    vkCmdEndRenderPass(*cmdBuf);
+    //vkCmdEndRenderPass(*cmdBuf);
 }
 
 static void initPrimitives(void)
@@ -323,13 +320,10 @@ Tanto_R_Primitive* r_GetCurve(void)
 void r_InitRenderer()
 {
     InitPipelines();
-
-    initOffscreenFrameBuffer();
-
+    initOffscreenRenderTargets();
+    initFrameBuffers();
     updateStaticDescriptors();
-    
     initPrimitives();
-
     initIndirectCmdStorage();
 }
 
@@ -343,35 +337,28 @@ void r_UpdateRenderCommands(void)
     VkClearValue clearValueColor = {0.002f, 0.002f, 0.004f, 1.0f};
     VkClearValue clearValueDepth = {1.0, 0};
 
-    VkClearValue clears[] = {clearValueColor, clearValueDepth};
+    VkClearValue clears[] = {clearValueColor, clearValueDepth, clearValueColor};
 
-    const VkRenderPassBeginInfo rpassOffscreen = {
+    const VkRenderPassBeginInfo renderpassMain = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .clearValueCount = 2,
+        .clearValueCount = TANTO_ARRAY_SIZE(clears),
         .pClearValues = clears,
         .renderArea = {{0, 0}, {TANTO_WINDOW_WIDTH, TANTO_WINDOW_HEIGHT}},
-        .renderPass =  offscreenFrameBuffer.renderPass,
-        .framebuffer = offscreenFrameBuffer.handle,
+        .renderPass =  msaaRenderPass,
+        .framebuffer = framebuffers[curFrameIndex],
     };
 
-    const VkRenderPassBeginInfo rpassSwap = {
-        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .clearValueCount = 1,
-        .pClearValues = clears,
-        .renderArea = {{0, 0}, {TANTO_WINDOW_WIDTH, TANTO_WINDOW_HEIGHT}},
-        .renderPass =  frame->frameBuffer.renderPass,
-        .framebuffer = frame->frameBuffer.handle
-    };
-
-    mainRender(&frame->commandBuffer, &rpassOffscreen);
-    postProc(&frame->commandBuffer, &rpassSwap);
+    mainRender(&frame->commandBuffer, &renderpassMain);
 
     V_ASSERT( vkEndCommandBuffer(frame->commandBuffer) );
 }
 
 void r_CleanUp(void)
 {
-    vkDestroyFramebuffer(device, offscreenFrameBuffer.handle, NULL);
-    tanto_v_DestroyImage(offscreenFrameBuffer.colorAttachment);
-    tanto_v_DestroyImage(offscreenFrameBuffer.depthAttachment);
+    for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
+    {
+        vkDestroyFramebuffer(device, framebuffers[i], NULL);
+    }
+    tanto_v_DestroyImage(renderTargetColor);
+    tanto_v_DestroyImage(renderTargetDepth);
 }
