@@ -12,6 +12,7 @@
 #include <tanto/t_utils.h>
 #include <tanto/r_pipeline.h>
 #include <tanto/r_raytrace.h>
+#include <tanto/r_renderpass.h>
 #include <tanto/v_command.h>
 #include <vulkan/vulkan_core.h>
 
@@ -20,6 +21,7 @@
 static Tanto_R_Image renderTargetColor;
 static Tanto_R_Image renderTargetDepth;
 
+static VkRenderPass  myRenderPass;
 static VkFramebuffer framebuffers[TANTO_FRAME_COUNT];
 
 static Tanto_V_BufferRegion uniformBufferRegion;
@@ -87,6 +89,78 @@ static void initOffscreenRenderTargets(void)
     tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, &renderTargetColor);
 }
 
+static void initRenderPass(void)
+{
+    const VkAttachmentDescription attachmentColor = {
+        .format = swapFormat,
+        .samples = SAMPLE_COUNT, // TODO look into what this means
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .finalLayout = VK_IMAGE_LAYOUT_GENERAL,
+    };
+
+    const VkAttachmentDescription attachmentDepth = {
+        .format = depthFormat,
+        .samples = SAMPLE_COUNT, // TODO look into what this means
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+    };
+
+    const VkAttachmentDescription attachmentPresent = {
+        .format = swapFormat,
+        .samples = VK_SAMPLE_COUNT_1_BIT, // TODO look into what this means
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+    };
+
+    VkAttachmentDescription attachments[] = {
+        attachmentColor,
+        attachmentDepth,
+        attachmentPresent
+    };
+
+    const VkAttachmentReference referenceColor = {
+        .attachment = 0,
+        .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+    };
+
+    const VkAttachmentReference referenceDepth = {
+        .attachment = 1,
+        .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+    };
+
+    const VkAttachmentReference referenceResolve = {
+        .attachment = 2,
+        .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    };
+
+    VkSubpassDescription subpass = {
+        .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+        .colorAttachmentCount = 1,
+        .pResolveAttachments  = &referenceResolve,
+        .pColorAttachments    = &referenceColor,
+        .pDepthStencilAttachment = &referenceDepth,
+        .inputAttachmentCount = 0,
+        .preserveAttachmentCount = 0,
+    };
+
+    Tanto_R_RenderPassInfo rpi = {
+        .subpassCount = 1,
+        .attachmentCount = 3,
+        .pSubpasses = &subpass,
+        .pAttachments = attachments 
+    };
+
+    tanto_r_CreateRenderPass(&rpi, &myRenderPass);
+}
+
 static void initFrameBuffers(void)
 {
     for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
@@ -102,7 +176,7 @@ static void initFrameBuffers(void)
         VkFramebufferCreateInfo ci = {
             .height = TANTO_WINDOW_HEIGHT,
             .width = TANTO_WINDOW_WIDTH,
-            .renderPass = msaaRenderPass,
+            .renderPass = myRenderPass,
             .layers = 1,
             .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
             .attachmentCount = 3,
@@ -152,7 +226,7 @@ static void updateDynamicDescriptors(void)
 {
 }
 
-static void InitPipelines(void)
+static void initPipelines(void)
 {
     const Tanto_R_DescriptorSet descriptorSets[] = {{
         .id = R_DESC_SET_MAIN,
@@ -177,7 +251,7 @@ static void InitPipelines(void)
         .type     = TANTO_R_PIPELINE_RASTER_TYPE,
         .layoutId = R_PIPE_LAYOUT_MAIN,
         .payload.rasterInfo = {
-            .renderPass = msaaRenderPass, 
+            .renderPass = myRenderPass, 
             .vertexDescription = tanto_r_GetVertexDescription3D_Simple(),
             .polygonMode = VK_POLYGON_MODE_LINE,
             .sampleCount = VK_SAMPLE_COUNT_8_BIT,
@@ -189,7 +263,7 @@ static void InitPipelines(void)
         .type     = TANTO_R_PIPELINE_RASTER_TYPE,
         .layoutId = R_PIPE_LAYOUT_MAIN,
         .payload.rasterInfo = {
-            .renderPass = msaaRenderPass, 
+            .renderPass = myRenderPass, 
             .vertexDescription = tanto_r_GetVertexDescription3D_Simple(),
             .polygonMode = VK_POLYGON_MODE_POINT,
             .sampleCount = VK_SAMPLE_COUNT_8_BIT,
@@ -253,24 +327,6 @@ static void mainRender(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInf
     vkCmdEndRenderPass(*cmdBuf);
 }
 
-static void postProc(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo* rpassInfo)
-{
-    //vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[R_PIPE_POST]);
-
-    //vkCmdBindDescriptorSets(
-    //    *cmdBuf, 
-    //    VK_PIPELINE_BIND_POINT_GRAPHICS, 
-    //    pipelineLayouts[R_PIPE_LAYOUT_POST], 
-    //    0, 1, &descriptorSets[R_DESC_SET_POST],
-    //    0, NULL);
-
-    //vkCmdBeginRenderPass(*cmdBuf, rpassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-    //vkCmdDraw(*cmdBuf, 3, 1, 0, 0);
-
-    //vkCmdEndRenderPass(*cmdBuf);
-}
-
 static void initPrimitives(void)
 {
     //create border
@@ -319,8 +375,9 @@ Tanto_R_Primitive* r_GetCurve(void)
 
 void r_InitRenderer()
 {
-    InitPipelines();
     initOffscreenRenderTargets();
+    initRenderPass();
+    initPipelines();
     initFrameBuffers();
     updateStaticDescriptors();
     initPrimitives();
@@ -344,7 +401,7 @@ void r_UpdateRenderCommands(void)
         .clearValueCount = TANTO_ARRAY_SIZE(clears),
         .pClearValues = clears,
         .renderArea = {{0, 0}, {TANTO_WINDOW_WIDTH, TANTO_WINDOW_HEIGHT}},
-        .renderPass =  msaaRenderPass,
+        .renderPass =  myRenderPass,
         .framebuffer = framebuffers[curFrameIndex],
     };
 
