@@ -1,0 +1,829 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta content="text/html; charset=utf-8" http-equiv="content-type">
+    <meta name="viewport" content="width=600">
+    <title>Enoch Tsang</title>
+    <link href="https://fonts.googleapis.com/css?family=Open+Sans|Share+Tech+Mono" rel="stylesheet">
+    <link href="/resources/min.css" rel="stylesheet" type="text/css">
+    <script src="/resources/min.js" type="text/javascript"></script>
+    
+    <script async src="https://www.googletagmanager.com/gtag/js?id=UA-108251740-1"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'UA-108251740-1');
+    </script>
+</head>
+<body>
+    <header>
+        <div class=header-bg></div>
+        <a href="/" class="signature"><img alt="Enoch Tsang" src="/resources/images/signature-logo.png"/></a>
+    </header>
+    <div class="nav-bar-border"></div>
+    <div class="nav-bar">
+        <input type="text" class="search-bar">
+    </div>
+    <div class="nav-bar-border"></div>
+    <div class="navigation-container">
+        <div class="search-results" picked-result="">
+        </div>
+        <div class="navigation-background"></div>
+        <div class="navigation-icon">
+            <div class="navigation-links">
+                <h2 class="about"><a>about</a></h2> 
+                <h2 class="portfolio"><a>portfolio</a></h2> 
+                <h2 class="contact"><a>contact</a></h2> 
+                <h2 class="resume"><a>resume</a></h2> 
+                <h2 class="articles"><a>articles</a></h2> 
+                <h2 class="goodtimes" style="height:100%;display:flex;justify-content:space-around;align-items:center;z-index:100;opacity:0;"><a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ">@</a></h2>
+            </div>
+            <svg class="pentagon" viewbox="0 0 520 495">
+                
+                
+                
+                
+                
+                
+                <path d="M260.0,10.0 L10.0,191.5 L105.5,475.5 L414.5,475.5 L510.0,191.5 L260.0,10.0 Z"/>
+                
+                    
+                    
+                <line x1="260.0" y1="10.0" x2="260.0" y2="272.5" />
+                <line x1="10.0" y1="191.5" x2="260.0" y2="272.5" />
+                <line x1="105.5" y1="475.5" x2="260.0" y2="272.5" />
+                <line x1="414.5" y1="475.5" x2="260.0" y2="272.5" />
+                <line x1="510.0" y1="191.5" x2="260.0" y2="272.5" />
+            </svg>
+        </div>
+
+    </div>
+    <div class="main-content-container">
+        <div class="main-content-wrapper">
+            <div class="main-content">
+            
+<div class="article-content">
+<h1 id="_tessellation_shaders_and_isolines" class="float">Tessellation Shaders and Isolines</h1>
+<div class="paragraph"><p><span class="docdate">Written by Enoch Tsang on November 8th, 2017 for OpenGL 4.1.</span></p></div>
+<div class="paragraph"><p>I had the chance to take a graphics class at the University of Calgary, CPSC 453.
+In this class we learned the mathematical basis for many graphics algorithms like dithering and splines for curve interpolation.
+The tests were based on this material.
+On the other hand, the assignments for the course were quite different.
+They involved doing "basic" things in OpenGL.
+I quote basic because since OpenGL is so low level, even simple things are fairly difficult.</p></div>
+<div class="paragraph"><p>The second assignment involved drawing Catmull-Rom splines on top of an image.
+I&#8217;ve provided some background information on  <a target="_blank" href="#catmull-rom-spline">Catmull-Rom Splines</a> in a different section in this article.</p></div>
+<div class="paragraph"><div class="title">Catmull-Rom Spline <a target="_blank" href="https://upload.wikimedia.org/wikipedia/commons/4/42/Catmull-Rom_Spline.png">source</a></div><p><span class="image">
+<img src="/resources/images/tessellation-shaders-isolines/catmull-rom-spline.png" alt="catmull-rom-spline" width="500" />
+</span></p></div>
+<div class="paragraph"><p>As you can see, drawing a spline involves drawing a curve.
+The course suggested to use tessellation shaders to draw curves (this is actually the ideal way to draw curves).
+But when I was looking online, guides for tessallation shaders weren&#8217;t very easy to follow.
+On top of that, this assignment also needed to be done with <a target="_blank" href="https://www.khronos.org/opengl/wiki/Tessellation_Evaluation_Shader#Abstract_patch_type">isolines</a> (as opposed to triangles or quads), but the few guides that were online were mostly done with triangles!</p></div>
+<div class="paragraph"><p>In this article, I would like to provide a guide on using tessallation shaders in OpenGL with the isolines patch type.
+<strong>Although this article is focused mainly on isolines, I do not assume that you know anything about tessallation shaders.</strong></p></div>
+<div class="sect1">
+<h2 id="_reader_assumptions">Reader Assumptions</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>In this article, I will write on the assumption that you (the reader) have a basic knowledge of:</p></div>
+<div class="ulist"><ul>
+<li>
+<p>
+C++, just syntactically so you can follow the example code.
+</p>
+</li>
+<li>
+<p>
+Vertex and Fragment Shaders in OpenGL.
+A deep knowledge isn&#8217;t necessary, just the basics of their inputs and outputs.
+</p>
+</li>
+<li>
+<p>
+Basic algebra, to follow some of the math, some algebraic knowledge will be required.
+</p>
+</li>
+</ul></div>
+<div class="paragraph"><p>If you don&#8217;t know OpenGL at all, I would highly recommend the <a target="_blank" href="https://learnopengl.com/">learnopengl</a> guides.
+In the midst of poor documentation and few beginner friendly guides online, <em>learnopengl</em> stood out as the go to resource.</p></div>
+<div class="paragraph"><p>Unfortunately, <em>learnopengl</em> was written for OpenGL 3.3, before tessallation was introduced to the standard, so tessellation shaders were not covered in the guides.
+If they were covered, I wouldn&#8217;t bother writing this article!</p></div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_what_is_tessallation">What is Tessallation</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>OpenGL mandates only two kinds of shaders for rendering, the vertex shader and the fragment shader:</p></div>
+<div class="ulist"><ul>
+<li>
+<p>
+The vertex shader&#8217;s <code>main()</code> is run for every vertex and calculates per vertex attributes.
+This is a great place for transforming vertices to post-projection space.
+For example say you wanted to translate your entire vertex array a couple units up, it&#8217;s more efficient to do this in the vertex shader where the GPU parallelizes all the calculations (what it&#8217;s good at), compared to your C/C++ code where the CPU would handle it.
+</p>
+</li>
+<li>
+<p>
+The fragment shader&#8217;s <code>main()</code> provides color and doesn&#8217;t do transformations per vertex.
+</p>
+</li>
+</ul></div>
+<div class="paragraph"><p>With just these two, if we wanted to draw a curve, we would need to generate and pass every vertex in the curve in the CPU, that&#8217;s very slow!</p></div>
+<div class="paragraph"><p>Somewhere in between the vertex shader and the fragment shader, we need to generate more vertices than just the ones given to the vertex shader (the ones made in the C/C++ code).
+Tessallation shaders are great for this purpose.
+In a nutshell, tessallation is a step in the rendering pipeline to help us create more vertices to work with then we had in the vertex shader.</p></div>
+<div class="sect2">
+<h3 id="_tessellation_in_the_rendering_pipeline">Tessellation in the Rendering Pipeline</h3>
+<div class="paragraph"><p>Tessallation is right after the vertex shader in the Rendering Pipeline, and it comes in 3 parts:</p></div>
+<div class="olist arabic"><ol class="arabic">
+<li>
+<p>
+Tessellation Control Shader (<strong>TCS</strong>)
+</p>
+</li>
+<li>
+<p>
+Tessellation Primitive Generation (<strong>TPG</strong>)
+</p>
+</li>
+<li>
+<p>
+Tessellation Evaluation Shader (<strong>TES</strong>)
+</p>
+</li>
+</ol></div>
+<div class="paragraph"><div class="title">Rendering Pipeline <a target="_blank" href="http://prideout.net/blog/p48/ShaderStages.png">source</a></div><p><span class="image">
+<img src="/resources/images/tessellation-shaders-isolines/opengl-pipeline.png" alt="Rendering Pipeline" width="300" />
+</span></p></div>
+<div class="admonitionblock">
+<table><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">Tessellation is totally optional in the rendering pipeline.
+To not include the tessallation stage, just don&#8217;t attach a TCS or TES to the shader program.</td>
+</tr></table>
+</div>
+<div class="paragraph"><p>The TCS and TES stages are programmable and the TPG stage is a <em>fixed function</em>.
+What I mean by programmable is that a shader is written for them.
+On the other hand, with a <em>fixed function</em> you can&#8217;t directly alter how this works, you can just affect the outputs with the input.
+It&#8217;s also worth noting that the TCS is also optional, it is fine to just include a TES with no TCS.</p></div>
+<div class="paragraph"><p>In broad terms to have a grasp at what happens in each stage we can say:</p></div>
+<div class="olist arabic"><ol class="arabic">
+<li>
+<p>
+The TCS says how much to tessellate the vertices, and also (optionally) modifies the control (original) vertices.
+</p>
+</li>
+<li>
+<p>
+The TPG actually does the tessellation based off what was chosen in the TCS, ultimately determining how many new vertices there will be.
+This stage doesn&#8217;t determine where the vertices go at all!
+Just how many.
+</p>
+</li>
+<li>
+<p>
+The TES is what actually determines where every point belongs in OpenGL space (-1 to 1).
+It iterates through all the points created by the TPG and for each one decides where in OpenGL space it goes.
+</p>
+</li>
+</ol></div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="catmull-rom-spline">Catmull-Rom Spline Background</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>Before we continue, some knowledge on Catmull-Rom splines is required.
+In a nutshell, a Catmull-Rom spline is an algorithm to draw a smooth curve through many points.
+In math terms, that means at any point, the derivative (slope) immediately to the left and right of a point are equal.</p></div>
+<div class="paragraph"><div class="title">Catmull-Rom Spline <a target="_blank" href="https://upload.wikimedia.org/wikipedia/commons/4/42/Catmull-Rom_Spline.png">source</a></div><p><span class="image">
+<img src="/resources/images/tessellation-shaders-isolines/catmull-rom-spline.png" alt="catmull-rom-spline" width="500" />
+</span></p></div>
+<div class="paragraph"><p>A non-smooth curve for example would be something like below.</p></div>
+<div class="paragraph"><p><span class="image">
+<img src="/resources/images/tessellation-shaders-isolines/non-smooth.png" alt="alt=non-smooth.png" />
+</span></p></div>
+<div class="paragraph"><p>I won&#8217;t go into detail on how to calculate a Catmull-Rom Spline, there&#8217;s plenty of information online on that (ableit very technical and math heavy) and is not the point of this article.</p></div>
+<div class="paragraph"><p>But what is important to know is that to calculate a Catmull-Rom spline between two points, <em>two more</em> points are needed, one before the curve and one after.</p></div>
+<div class="paragraph"><p><strong>In conclusion, with four points, you can draw a Catmull-Rom spline between the middle two points.</strong>
+Another way of saying that is that with four points, <code>[p0, p1, p2, p3]</code>, you can derive the equation for any point that lies between <code>p1</code> and <code>p2</code>.</p></div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_tessellation_example">Tessellation Example</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>For the purpose of this article, I&#8217;ve created a <a target="_blank" href="https://github.com/enochtsang/catmull_rom_spine_opengl">GitHub repository</a> showing a Catmull-Rom spline using tessallation shaders.
+All the source code is included to use and play around with.</p></div>
+<div class="paragraph"><p>The end result looks like this.</p></div>
+<div class="paragraph"><p><span class="image">
+<img src="/resources/images/tessellation-shaders-isolines/catmull-rom-spline-demo.png" alt="alt=catmull-rom-spline-demo" />
+</span></p></div>
+<div class="paragraph"><p>Drawing the whole spline can be split up into about 3 steps.</p></div>
+<div class="olist arabic"><ol class="arabic">
+<li>
+<p>
+Preparing the Vertices for the tessellation control shader
+</p>
+</li>
+<li>
+<p>
+Writing the tessellation control shader
+</p>
+</li>
+<li>
+<p>
+Writing the tessellation evaluation shader
+</p>
+</li>
+</ol></div>
+<div class="sect2">
+<h3 id="_preparing_the_vertices_for_the_tessellation_control_shader">Preparing the Vertices for the Tessellation Control Shader</h3>
+<div class="paragraph"><p>In the vertex shader, a vertex only knows about itself and can&#8217;t calculate any new information based on other vertices (it technically can with uniforms but that&#8217;s not what it&#8217;s supposed to do).
+In comparison to tessellation shaders, they can calculate information based on other vertices, but not all of them, only the same vertices within the same <em>patch</em>.</p></div>
+<div class="paragraph"><p><em>Patches</em> are an important concept in tessellation shaders.
+Before passing the vertices to a tessellation shader, the vertices must be split into patches and then the TCS must be told how many vertices are in each patch.
+Telling the TCS how many vertices are in a patch is done with the function call:</p></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>glPatchParameteri(GL_PATCH_VERTICES, 3);</code></pre>
+</div></div>
+<div class="paragraph"><p>In this case, we tell the rendering pipeline that there are 3 vertices per patch, we refer to this as the patch size.
+This should be called right before the the draw command you use, like <code>glDrawElements()</code> or <code>glDrawArrays()</code>.
+You can see an example of its usage in the <code>src/CatmullRomSpline.cpp</code> file in the <a target="_blank" href="https://github.com/enochtsang/catmull_rom_spine_opengl/blob/master/src/CatmullRomSpline.cpp">GitHub</a> example.</p></div>
+<div class="admonitionblock">
+<table><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">There are a max number of vertices you can put per patch.
+You can get it using <em>glGetIntegerv(GL_MAX_PATCH_VERTICES, &amp;maxPatchVertices);</em>.
+This number is most commonly 32.</td>
+</tr></table>
+</div>
+<div class="paragraph"><p>Putting this together, if the vertex shader received the points <code>u</code>, <code>v</code>, <code>w</code>, <code>x</code>, <code>y</code>, <code>z</code>, and our specified patch size was 3.
+The Tessellation control shader would receive the 2 patches <code>[u, v, w]</code> and <code>[x, y, z]</code>.</p></div>
+<div class="paragraph"><p>Let&#8217;s take a look at a Catmull-Rom spline now.
+Consider the following points and curves.</p></div>
+<div class="paragraph"><p><span class="image">
+<img src="/resources/images/tessellation-shaders-isolines/marked-curve.png" alt="alt=marked-curve" />
+</span></p></div>
+<div class="paragraph"><p>At the end of tessellation we want to have interpolated all the vertices to draw the curves, using the control points <code>a</code> to <code>f</code>.
+If we wanted to draw the first curve (between <code>b</code> and <code>c</code>, we would need the first four points <code>a</code>, <code>b</code>, <code>c</code>, and <code>d</code>.
+The next curve would then be between points <code>c</code> and <code>d</code>, requiring points <code>b</code>, <code>c</code>, <code>d</code>, and <code>e</code>, and so on.</p></div>
+<div class="paragraph"><p>This translates into what needs to be in each patch.
+The patches that we would need to pass into the TCS would be:</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><code>[a, b, c, d]
+[b, c, d, e]
+[c, d, e, f]</code></pre>
+</div></div>
+<div class="paragraph"><p>Where each letter is one vertex and each set of <code>[]</code> is one patch.</p></div>
+<div class="paragraph"><p>To do this, we pass the vertices sequentially into the vertex shader, so like <code>a, b, c, d, b, c, d, e, c, d, e, f</code>.
+Then we split them up into patches using <code>GL_PATCH_VERTICES</code>.</p></div>
+<div class="admonitionblock">
+<table><tr>
+<td class="icon">
+<div class="title">Note</div>
+</td>
+<td class="content">Passing the vertices sequentially in this fashion can be done a number of ways.
+I used an element buffer object along with a vertex buffer object in the full example on <a target="_blank" href="https://github.com/enochtsang/catmull_rom_spine_opengl">GitHub</a>.</td>
+</tr></table>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_writing_the_tessellation_control_shader">Writing the Tessellation Control Shader</h3>
+<div class="paragraph"><p>Now we have our information in the patch format that we need.
+Using this, the TCS needs to output the following information:</p></div>
+<div class="ulist"><ul>
+<li>
+<p>
+Outer tessellation levels in <code>gl_TessLevelOuter[4]</code>.
+</p>
+</li>
+<li>
+<p>
+Inner tessellation levels in <code>gl_TessLevelInner[2]</code>.
+</p>
+</li>
+<li>
+<p>
+The output "control" vertices in <code>gl_out</code>.
+</p>
+</li>
+</ul></div>
+<div class="sect3">
+<h4 id="_tessellation_levels">Tessellation Levels</h4>
+<div class="paragraph"><p>In brief, tessellation levels define how much to tessellate an object.
+In other words this means how much to split it up, or how many new vertices to create.
+There are 6 different tessellation level values that can be provided to the TPG, four outer tessallation levels and 2 inner tessallation levels.
+Different patch types use the tessallation levels differently, this particular guide is aimed towards the isolines patch type (more about patch types in the next section).
+With isolines, the only tessellation levels considered by the TPG are <code>gl_TessLevelOuter[0]</code> and <code>gl_TessLevelOuter[1]</code>.
+The last two outer tessallation levels and inner tessallation levels are unused by the isolines patch type.</p></div>
+<div class="olist arabic"><ol class="arabic">
+<li>
+<p>
+<code>gl_TessLevelOuter[0]</code> specifies how many isolines to create, this becomes the maximum value for <code>gl_TessCoord.y</code> in the TES.
+</p>
+</li>
+<li>
+<p>
+<code>gl_TessLevelOuter[1]</code> specifies how many times to split up a particular line, this how far apart <code>gl_TessCoord.x</code> is in different invocations.
+</p>
+</li>
+</ol></div>
+<div class="paragraph"><p>It&#8217;s not quite correct to say what this looks like, because only the evaluation shader actually decides where the vertices go in space, but here is an example to conceptualize what the two tessallation levels do.</p></div>
+<div class="paragraph"><div class="title">Isolines Tessellation Levels Example <a target="_blank" href="https://www.khronos.org/opengl/wiki_opengl/images/Tessellation_isoline_4_3.png">source</a></div><p><span class="image">
+<img src="/resources/images/tessellation-shaders-isolines/isoline-level-example.jpg" alt="alt=Isolines-example" />
+</span></p></div>
+<div class="paragraph"><p>Take a moment to guess what the values of <code>gl_TessLevelOuter[0]</code> and <code>gl_TessLevelOuter[1]</code> are.</p></div>
+<div class="paragraph"><p>&#8230;</p></div>
+<div class="paragraph"><p>The correct answer is 3 for <code>gl_TessLevelOuter[0]</code> and 4 for <code>gl_TessLevelOuter[1]</code>.
+In this case for drawing a Catmull-Rom spline, <code>gl_TessLevelOuter[1]</code> will determine how smooth the curve will look.
+<code>gl_TessLevelOuter[0]</code> doesn&#8217;t really have too much effect on the end result, but I&#8217;ve used it in the example code to draw multiple lines for effect.</p></div>
+</div>
+<div class="sect3">
+<h4 id="_output_vertices">Output Vertices</h4>
+<div class="paragraph"><p>The TCS receives a set number of vertices for a number of patches.
+The number of patches that the TCS outputs must be the same as the amount that it receives.
+But what <em>can</em> differ, is the number of vertices per patch.</p></div>
+<div class="paragraph"><p>The number of vertices per patch given to the TCS is defined in <code>GL_PATCH_VERTICES</code>.
+The TCS defines how many vertices per patch to output.
+This is defined in the TCS file with:</p></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>layout(vertices = n) out;</code></pre>
+</div></div>
+<div class="paragraph"><p>In actual code, you wouldn&#8217;t write <code>n</code> but pick an actual numerical value.
+A patch is represented in the built-in provided variable <code>gl_out</code>, the format is as follows:</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><tt><span style="font-weight: bold"><span style="color: #0000FF">out</span></span> gl_PerVertex
+<span style="color: #FF0000">{</span>
+  <span style="color: #009900">vec4</span> <span style="color: #000080">gl_Position</span><span style="color: #990000">;</span>
+  <span style="color: #009900">float</span> <span style="color: #000080">gl_PointSize</span><span style="color: #990000">;</span>
+  <span style="color: #009900">float</span> gl_ClipDistance<span style="color: #990000">[];</span>
+<span style="color: #FF0000">}</span> gl_out<span style="color: #990000">[];</span></tt></pre></div></div>
+<div class="paragraph"><p>Notice that <code>gl_out</code> is an array, the size of the <code>gl_out</code> array is the same as the number in</p></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>layout(vertices = 2) out;</code></pre>
+</div></div>
+<div class="paragraph"><p>In the case above, the size of <code>gl_out</code> would be two, meaning the output patch size is 2.
+Great so that means, there is complete freedom to define the vertices that go to the TPG and TES!
+Actually&#8230; not quite.</p></div>
+<div class="paragraph"><p>There&#8217;s a gotcha, you can only write to the vertex that the current invocation is for.
+Let&#8217;s talk about how often the TCS is invoked.</p></div>
+</div>
+<div class="sect3">
+<h4 id="_invocations">Invocations</h4>
+<div class="paragraph"><p><code>layout(vertices = 2) out;</code> not only defines the number of output vertices per patch, it also partially defines how many times the TCS <code>main()</code> is invoked.
+<strong>For every output vertex for every patch, the TCS is invoked once</strong>.</p></div>
+<div class="paragraph"><p>Let&#8217;s slow down for a second and talk about what it means for a shader to be "invoked".
+One invocation means one call to a shader&#8217;s <code>main()</code> function.
+In a GPU, at each stage, everything is parallelized by default.
+By comparison, in normal code, running something multiple times usually means running it in a loop, so each call is sequential.
+So in a GPU, this means when we write our shader, it&#8217;s important to understand that every invocation to a shader is happening <em>at the same time</em>.
+Hopefully saying "one invocation" makes a little more sense now.</p></div>
+<div class="paragraph"><p>Going back to how many times the TCS is invoked, you can figure out which output vertex the current invocation is for in <code>main()</code> with the built in variable <code>gl_InvocationID</code>.
+The current patch that is being operated on can also be determined using <code>gl_PrimitiveID</code>.
+The OpenGL standard has mandated that only the <code>gl_out</code> index that is the same as the <code>gl_InvocationID</code> can be written to.
+You can still read from the other indices at any time though.</p></div>
+<div class="paragraph"><p>What this means, is that the following code is dangerous.</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><tt>gl_out<span style="color: #990000">[</span><span style="color: #993399">0</span><span style="color: #990000">]</span><span style="color: #000080">.g</span>l_Position <span style="color: #990000">=</span> gl_in<span style="color: #990000">[</span><span style="color: #993399">1</span><span style="color: #990000">]</span><span style="color: #000080">.g</span>l_Position<span style="color: #990000">;</span></tt></pre></div></div>
+<div class="paragraph"><p>It&#8217;s dangerous because <code>gl_out</code> is being written to for an index that isn&#8217;t absolutely the same as <code>gl_InvocationID</code>.
+In fact, the above shader code won&#8217;t even compile on some platforms.
+The correct way to write to the 0th index would be below.</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><tt><span style="font-weight: bold"><span style="color: #0000FF">if</span></span><span style="color: #990000">(</span>gl_InvocationID <span style="color: #990000">==</span> <span style="color: #993399">0</span><span style="color: #990000">)</span> <span style="color: #FF0000">{</span>
+        gl_out<span style="color: #990000">[</span>gl_InvocationID<span style="color: #990000">]</span><span style="color: #000080">.g</span>l_Position <span style="color: #990000">=</span> gl_in<span style="color: #990000">[</span><span style="color: #993399">1</span><span style="color: #990000">]</span><span style="color: #000080">.g</span>l_Position<span style="color: #990000">;</span>
+<span style="color: #FF0000">}</span></tt></pre></div></div>
+<div class="paragraph"><p>This ensures that we are on the 0th invocation when <code>gl_out[0]</code> is being written.</p></div>
+</div>
+<div class="sect3">
+<h4 id="_tcs_example_explanation">TCS Example Explanation</h4>
+<div class="paragraph"><p>Here is the tessellation control shader from the example.</p></div>
+<div class="listingblock">
+<div class="title">spline_tess_control.glsl</div>
+<div class="content">
+<pre><tt><span style="font-weight: bold"><span style="color: #000080">#version</span></span> <span style="color: #993399">410</span>
+
+<span style="font-weight: bold"><span style="color: #000000">layout</span></span><span style="color: #990000">(</span>vertices <span style="color: #990000">=</span> <span style="color: #993399">2</span><span style="color: #990000">)</span> <span style="font-weight: bold"><span style="color: #0000FF">out</span></span><span style="color: #990000">;</span>
+
+patch <span style="font-weight: bold"><span style="color: #0000FF">out</span></span> <span style="color: #009900">vec4</span> p_1<span style="color: #990000">;</span>
+patch <span style="font-weight: bold"><span style="color: #0000FF">out</span></span> <span style="color: #009900">vec4</span> p2<span style="color: #990000">;</span>
+
+<span style="color: #009900">void</span> <span style="font-weight: bold"><span style="color: #000000">main</span></span><span style="color: #990000">()</span>
+<span style="color: #FF0000">{</span>
+        <span style="font-weight: bold"><span style="color: #0000FF">if</span></span><span style="color: #990000">(</span>gl_InvocationID <span style="color: #990000">==</span> <span style="color: #993399">0</span><span style="color: #990000">)</span> <span style="color: #FF0000">{</span>
+                gl_TessLevelOuter<span style="color: #990000">[</span><span style="color: #993399">0</span><span style="color: #990000">]</span> <span style="color: #990000">=</span> <span style="color: #009900">float</span><span style="color: #990000">(</span><span style="color: #993399">4</span><span style="color: #990000">);</span>
+                gl_TessLevelOuter<span style="color: #990000">[</span><span style="color: #993399">1</span><span style="color: #990000">]</span> <span style="color: #990000">=</span> <span style="color: #009900">float</span><span style="color: #990000">(</span><span style="color: #993399">64</span><span style="color: #990000">);</span>
+
+                p_1 <span style="color: #990000">=</span> gl_in<span style="color: #990000">[</span><span style="color: #993399">0</span><span style="color: #990000">]</span><span style="color: #000080">.g</span>l_Position<span style="color: #990000">;</span>
+                p2 <span style="color: #990000">=</span> gl_in<span style="color: #990000">[</span><span style="color: #993399">3</span><span style="color: #990000">]</span><span style="color: #000080">.g</span>l_Position<span style="color: #990000">;</span>
+        <span style="color: #FF0000">}</span>
+
+        <span style="font-weight: bold"><span style="color: #0000FF">if</span></span><span style="color: #990000">(</span>gl_InvocationID <span style="color: #990000">==</span> <span style="color: #993399">0</span><span style="color: #990000">)</span> <span style="color: #FF0000">{</span>
+                gl_out<span style="color: #990000">[</span>gl_InvocationID<span style="color: #990000">]</span><span style="color: #000080">.g</span>l_Position <span style="color: #990000">=</span> gl_in<span style="color: #990000">[</span><span style="color: #993399">1</span><span style="color: #990000">]</span><span style="color: #000080">.g</span>l_Position<span style="color: #990000">;</span>
+        <span style="color: #FF0000">}</span>
+
+        <span style="font-weight: bold"><span style="color: #0000FF">if</span></span><span style="color: #990000">(</span>gl_InvocationID <span style="color: #990000">==</span> <span style="color: #993399">1</span><span style="color: #990000">)</span> <span style="color: #FF0000">{</span>
+                gl_out<span style="color: #990000">[</span>gl_InvocationID<span style="color: #990000">]</span><span style="color: #000080">.g</span>l_Position <span style="color: #990000">=</span> gl_in<span style="color: #990000">[</span><span style="color: #993399">2</span><span style="color: #990000">]</span><span style="color: #000080">.g</span>l_Position<span style="color: #990000">;</span>
+        <span style="color: #FF0000">}</span>
+<span style="color: #FF0000">}</span></tt></pre></div></div>
+<div class="paragraph"><p>Let&#8217;s walk through this line by line.</p></div>
+<div class="paragraph"><p>This defines the OpenGL version this shader is meant for, 4.1.0.</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><tt><span style="font-weight: bold"><span style="color: #000080">#version</span></span> <span style="color: #993399">410</span></tt></pre></div></div>
+<div class="paragraph"><p>The curve is only drawn between two points, so our output patch should only have 2 vertices.</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><tt><span style="font-weight: bold"><span style="color: #000000">layout</span></span><span style="color: #990000">(</span>vertices <span style="color: #990000">=</span> <span style="color: #993399">2</span><span style="color: #990000">)</span> <span style="font-weight: bold"><span style="color: #0000FF">out</span></span><span style="color: #990000">;</span></tt></pre></div></div>
+<div class="paragraph"><p>If you&#8217;re familiar with uniforms, this is similar.
+This allows patch specific information to be passed from the TCS to the TES.
+In this case, a <code>vec4</code> called <code>p_1</code> and <code>p2</code> will be made available for the same patch in the TES.</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><tt>patch <span style="font-weight: bold"><span style="color: #0000FF">out</span></span> <span style="color: #009900">vec4</span> p_1<span style="color: #990000">;</span>
+patch <span style="font-weight: bold"><span style="color: #0000FF">out</span></span> <span style="color: #009900">vec4</span> p2<span style="color: #990000">;</span></tt></pre></div></div>
+<div class="paragraph"><p>The <code>main()</code> function gets invoked for every output vertex in every patch.</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><tt><span style="color: #009900">void</span> <span style="font-weight: bold"><span style="color: #000000">main</span></span><span style="color: #990000">()</span></tt></pre></div></div>
+<div class="paragraph"><p>The stuff happening in this <code>if</code> block only needs to happen once per patch, so we do it just once when <code>gl_InvocationId == 0</code>.
+That last number could&#8217;ve been 1 and wouldn&#8217;t have made a difference.
+But a warning, that if different invocations for the same patch write different values to the variables in this <code>if</code> block, bad things will happen.</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><tt>        <span style="font-weight: bold"><span style="color: #0000FF">if</span></span><span style="color: #990000">(</span>gl_InvocationID <span style="color: #990000">==</span> <span style="color: #993399">0</span><span style="color: #990000">)</span> <span style="color: #FF0000">{</span></tt></pre></div></div>
+<div class="paragraph"><p>Here we say the number of isolines is 4 and to split up each line into 64 segments.</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><tt>                gl_TessLevelOuter<span style="color: #990000">[</span><span style="color: #993399">0</span><span style="color: #990000">]</span> <span style="color: #990000">=</span> <span style="color: #009900">float</span><span style="color: #990000">(</span><span style="color: #993399">4</span><span style="color: #990000">);</span>
+                gl_TessLevelOuter<span style="color: #990000">[</span><span style="color: #993399">1</span><span style="color: #990000">]</span> <span style="color: #990000">=</span> <span style="color: #009900">float</span><span style="color: #990000">(</span><span style="color: #993399">64</span><span style="color: #990000">);</span></tt></pre></div></div>
+<div class="paragraph"><p>A Catmull-Rom Spline still needs four points to be calculated even if they&#8217;re not the control points.
+So we pass in the first and last point through patch variables.
+<code>p_1</code> is supposed to mean <em>p negative one</em>.
+They&#8217;re named <code>p_1</code> and <code>p2</code> because the two middle points will be <code>p0</code> and <code>p1</code> in the TES.
+So in the TES there will be points <code>p_1</code>, <code>p0</code>, <code>p1</code>, and <code>p2</code>.</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><tt>                p_1 <span style="color: #990000">=</span> gl_in<span style="color: #990000">[</span><span style="color: #993399">0</span><span style="color: #990000">]</span><span style="color: #000080">.g</span>l_Position<span style="color: #990000">;</span>
+                p2 <span style="color: #990000">=</span> gl_in<span style="color: #990000">[</span><span style="color: #993399">3</span><span style="color: #990000">]</span><span style="color: #000080">.g</span>l_Position<span style="color: #990000">;</span></tt></pre></div></div>
+<div class="paragraph"><p>The goal here is to set the first vertex of the out patch to be the second vertex of the in patch.
+It makes a lot of sense to write <code>gl_out[0].gl_Position = gl_in[1].gl_Position</code>, but because a <code>gl_out</code> index can only be written to on the same invocation id, this <code>if</code> statement is necessary.</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><tt>        <span style="font-weight: bold"><span style="color: #0000FF">if</span></span><span style="color: #990000">(</span>gl_InvocationID <span style="color: #990000">==</span> <span style="color: #993399">0</span><span style="color: #990000">)</span> <span style="color: #FF0000">{</span>
+                gl_out<span style="color: #990000">[</span>gl_InvocationID<span style="color: #990000">]</span><span style="color: #000080">.g</span>l_Position <span style="color: #990000">=</span> gl_in<span style="color: #990000">[</span><span style="color: #993399">1</span><span style="color: #990000">]</span><span style="color: #000080">.g</span>l_Position<span style="color: #990000">;</span>
+        <span style="color: #FF0000">}</span></tt></pre></div></div>
+<div class="paragraph"><p>This is similar to the last section, it sets the second vertex of the out patch to be the third vertex of the in patch.</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><tt>        <span style="font-weight: bold"><span style="color: #0000FF">if</span></span><span style="color: #990000">(</span>gl_InvocationID <span style="color: #990000">==</span> <span style="color: #993399">1</span><span style="color: #990000">)</span> <span style="color: #FF0000">{</span>
+                gl_out<span style="color: #990000">[</span>gl_InvocationID<span style="color: #990000">]</span><span style="color: #000080">.g</span>l_Position <span style="color: #990000">=</span> gl_in<span style="color: #990000">[</span><span style="color: #993399">2</span><span style="color: #990000">]</span><span style="color: #000080">.g</span>l_Position<span style="color: #990000">;</span>
+        <span style="color: #FF0000">}</span></tt></pre></div></div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_writing_the_tessellation_evaluation_shader">Writing the Tessellation Evaluation Shader</h3>
+<div class="paragraph"><p>Now at this stage, the TCS has told the TPG how much to tessellate each patch.
+The TPG has done its calculations and gives tons of vertices to the TES.
+It&#8217;s now the TES&#8217;s job to determine the position for each of the vertices.</p></div>
+<div class="sect3">
+<h4 id="_invocations_2">Invocations</h4>
+<div class="paragraph"><p>For the TES, I&#8217;ll start with when <code>main()</code> in the TES gets invoked.
+The TES&#8217;s <code>main()</code> will be invoked for every interpolated vertex generated by the TPG.
+Remember the tessellation levels defined in the TCS?
+That tells us how many vertices got generated by the TPG and therefore tells us how many vertices the TES operates on.
+The amount of vertices also varies depending on the patch type.</p></div>
+<div class="literalblock">
+<div class="content">
+<pre><code>layout (isolines) in;</code></pre>
+</div></div>
+<div class="paragraph"><p>This defines the patch type, in this case it is isolines.
+The other options include <code>triangles</code> and <code>quads</code>, but this article will only focus on <code>isolines</code>.</p></div>
+<div class="paragraph"><p>So let&#8217;s recap what we got here:</p></div>
+<div class="ulist"><ul>
+<li>
+<p>
+The number of isolines created is 4, from <code>gl_TessLevelOuter[0] = float(4);</code>.
+</p>
+</li>
+<li>
+<p>
+The number of segments for a line is 64 from <code>gl_TessLevelOuter[1] = float(64);</code>.
+</p>
+</li>
+<li>
+<p>
+Only those two tessellation levels matter because the patch type is <code>isolines</code>.
+</p>
+</li>
+</ul></div>
+<div class="paragraph"><p>So this means for each patch, the TES is invoked  4 * 64 times, 256 times, 256 vertices per patch!</p></div>
+<div class="paragraph"><p>Each of these vertices need to be told their own location in the OpenGL space (-1 to 1).
+Where is that defined?</p></div>
+</div>
+<div class="sect3">
+<h4 id="_outputs">Outputs</h4>
+<div class="paragraph"><p>Defining the position for each vertex is actually the same as in the vertex shader, with the output <code>gl_Position</code>.
+The difference is, the vertex doesn&#8217;t have its OpenGL position passed to it already like it probably was in the vertex shader.
+It needs to be calculated from some other input values.</p></div>
+</div>
+<div class="sect3">
+<h4 id="_inputs">Inputs</h4>
+<div class="paragraph"><p>The built in values that we can work with are <code>gl_TessCoord</code> and <code>gl_in</code>.</p></div>
+<div class="paragraph"><p>For isolines, <code>gl_TessCoord</code> has two valid values, <code>x</code> and <code>y</code>:</p></div>
+<div class="ulist"><ul>
+<li>
+<p>
+<code>gl_TessCoord.x</code> tells us how far along the line the vertex is.
+</p>
+</li>
+<li>
+<p>
+<code>gl_TessCoord.y</code> tells us which isoline the vertex is on.
+</p>
+</li>
+</ul></div>
+<div class="paragraph"><p><code>gl_in</code> is per patch information that we get from the TCS.
+It&#8217;s the same as the <code>gl_out</code> variable that was defined in the TCS, meaning it&#8217;s an array of the control points.
+For this Catmull-Rom Spline example, it will be an array of two.</p></div>
+</div>
+<div class="sect3">
+<h4 id="_slope_example">Slope Example</h4>
+<div class="paragraph"><p>Before we dive into calculating values along a curve, let&#8217;s do something simpler and easier to grasp.
+Interpolating a straight line between <code>p0</code> and <code>p1</code>.</p></div>
+<div class="listingblock">
+<div class="title">A straight line TES</div>
+<div class="content">
+<pre><tt><span style="font-weight: bold"><span style="color: #000080">#version</span></span> <span style="color: #993399">410</span> core
+
+<span style="font-weight: bold"><span style="color: #000000">layout</span></span> <span style="color: #990000">(</span>isolines<span style="color: #990000">)</span> <span style="font-weight: bold"><span style="color: #0000FF">in</span></span><span style="color: #990000">;</span>
+
+<span style="color: #009900">void</span> <span style="font-weight: bold"><span style="color: #000000">main</span></span><span style="color: #990000">()</span>
+<span style="color: #FF0000">{</span>
+        <span style="color: #009900">vec4</span> p0 <span style="color: #990000">=</span> gl_in<span style="color: #990000">[</span><span style="color: #993399">0</span><span style="color: #990000">]</span><span style="color: #000080">.g</span>l_Position<span style="color: #990000">;</span>
+        <span style="color: #009900">vec4</span> p1 <span style="color: #990000">=</span> gl_in<span style="color: #990000">[</span><span style="color: #993399">1</span><span style="color: #990000">]</span><span style="color: #000080">.g</span>l_Position<span style="color: #990000">;</span>
+        <span style="color: #009900">float</span> u <span style="color: #990000">=</span> gl_TessCoord<span style="color: #000080">.x</span><span style="color: #990000">;</span>
+
+        <span style="color: #009900">float</span> slope <span style="color: #990000">=</span> <span style="color: #990000">(</span>p1<span style="color: #000080">.y</span> <span style="color: #990000">-</span> p0<span style="color: #000080">.y</span><span style="color: #990000">)</span> <span style="color: #990000">/</span> <span style="color: #990000">(</span>p1<span style="color: #000080">.x</span> <span style="color: #990000">-</span> p0<span style="color: #000080">.x</span><span style="color: #990000">);</span>
+        <span style="color: #009900">float</span> x <span style="color: #990000">=</span> <span style="color: #990000">((</span>p1<span style="color: #000080">.x</span> <span style="color: #990000">-</span> p0<span style="color: #000080">.x</span><span style="color: #990000">)</span> <span style="color: #990000">*</span> u<span style="color: #990000">)</span> <span style="color: #990000">+</span> p0<span style="color: #000080">.x</span><span style="color: #990000">;</span>
+        <span style="color: #009900">float</span> y <span style="color: #990000">=</span> <span style="color: #990000">(</span>u <span style="color: #990000">*</span> slope <span style="color: #990000">*</span> <span style="color: #990000">(</span>p1<span style="color: #000080">.x</span> <span style="color: #990000">-</span> p0<span style="color: #000080">.x</span><span style="color: #990000">))</span> <span style="color: #990000">+</span> p0<span style="color: #000080">.y</span><span style="color: #990000">;</span>
+        <span style="color: #000080">gl_Position</span> <span style="color: #990000">=</span> <span style="color: #009900">vec4</span><span style="color: #990000">(</span>x<span style="color: #990000">,</span> y<span style="color: #990000">,</span> <span style="color: #993399">0</span><span style="color: #990000">.</span>0f<span style="color: #990000">,</span> <span style="color: #993399">1</span><span style="color: #990000">.</span>f<span style="color: #990000">);</span>
+<span style="color: #FF0000">}</span></tt></pre></div></div>
+<div class="paragraph"><p>Let&#8217;s take a closer look through this.
+This section helps us use the data given from the TCS.
+Remember that the TCS gave the second and third point of our original patch data.
+So <code>gl_in[0]</code> here is actually the second point from our original patch data.</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><tt>        <span style="color: #009900">vec4</span> p0 <span style="color: #990000">=</span> gl_in<span style="color: #990000">[</span><span style="color: #993399">0</span><span style="color: #990000">]</span><span style="color: #000080">.g</span>l_Position<span style="color: #990000">;</span>
+        <span style="color: #009900">vec4</span> p1 <span style="color: #990000">=</span> gl_in<span style="color: #990000">[</span><span style="color: #993399">1</span><span style="color: #990000">]</span><span style="color: #000080">.g</span>l_Position<span style="color: #990000">;</span></tt></pre></div></div>
+<div class="paragraph"><p>Here <code>gl_TessCoord.x</code> tells us how far along in the line we are.
+In many <a target="_blank" href="https://www.mvps.org/directx/articles/catmull/">curve equations</a>, it is the t value.
+For vertices very close to the first control point, i.e. <code>gl_in[0]</code>, the value will be close to 0.
+For vertices very close to the last control point, in our case <code>gl_in[1]</code>, the value will be close to 1.</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><tt>        <span style="color: #009900">float</span> u <span style="color: #990000">=</span> gl_TessCoord<span style="color: #000080">.x</span><span style="color: #990000">;</span></tt></pre></div></div>
+<div class="paragraph"><p>So now we have some math work to figure out the actual <code>gl_Position</code> from this information.
+This line calculates the slope between <code>p0</code> and <code>p1</code>, a simple <code>rise / run</code> formula, we&#8217;ll use this later.</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><tt>        <span style="color: #009900">float</span> slope <span style="color: #990000">=</span> <span style="color: #990000">(</span>p1<span style="color: #000080">.y</span> <span style="color: #990000">-</span> p0<span style="color: #000080">.y</span><span style="color: #990000">)</span> <span style="color: #990000">/</span> <span style="color: #990000">(</span>p1<span style="color: #000080">.x</span> <span style="color: #990000">-</span> p0<span style="color: #000080">.x</span><span style="color: #990000">);</span></tt></pre></div></div>
+<div class="paragraph"><p>This calculates the <code>x</code> coordinate in OpenGL space.</p></div>
+<div class="olist arabic"><ol class="arabic">
+<li>
+<p>
+First we get the <code>x</code> (horizontal) length of the line we&#8217;re on using <code>p1.x - p0.x</code>.
+</p>
+</li>
+<li>
+<p>
+Then we multiply that by how far along we are on the line, <code>(p1.x - p0.x) * u</code>.
+</p>
+</li>
+<li>
+<p>
+Now we have how far we should be from the first point <code>p0.x</code> in OpenGL space.
+</p>
+</li>
+<li>
+<p>
+We then add the <code>p0.x</code> value to find exactly where this point goes in OpenGL space.
+</p>
+</li>
+</ol></div>
+<div class="listingblock">
+<div class="content">
+<pre><tt>        <span style="color: #009900">float</span> x <span style="color: #990000">=</span> <span style="color: #990000">((</span>p1<span style="color: #000080">.x</span> <span style="color: #990000">-</span> p0<span style="color: #000080">.x</span><span style="color: #990000">)</span> <span style="color: #990000">*</span> u<span style="color: #990000">)</span> <span style="color: #990000">+</span> p0<span style="color: #000080">.x</span><span style="color: #990000">;</span></tt></pre></div></div>
+<div class="paragraph"><p>This calculate the <code>y</code> coordinate in OpenGL space.</p></div>
+<div class="olist arabic"><ol class="arabic">
+<li>
+<p>
+First we calculate the <code>y</code> value in respect to <code>u</code>, this is the smaller space where points close to <code>p0</code> are 0 and points close to <code>p1</code> are 1.
+We do this just by multiplying the slope by <code>u</code>, like the common line equation <code>y = mx</code>.
+</p>
+</li>
+<li>
+<p>
+Next we convert that to world space similar to how we did for <code>u</code>.
+<code>u * slope * (p1.x-p0.x)</code>.
+</p>
+</li>
+<li>
+<p>
+Lastly, similar to calculating <code>x</code>, again we add <code>p0.y</code> to find exactly where the point goes in OpenGL space.
+</p>
+</li>
+</ol></div>
+<div class="listingblock">
+<div class="content">
+<pre><tt>        <span style="color: #009900">float</span> y <span style="color: #990000">=</span> <span style="color: #990000">(</span>u <span style="color: #990000">*</span> slope <span style="color: #990000">*</span> <span style="color: #990000">(</span>p1<span style="color: #000080">.x</span> <span style="color: #990000">-</span> p0<span style="color: #000080">.x</span><span style="color: #990000">))</span> <span style="color: #990000">+</span> p0<span style="color: #000080">.y</span><span style="color: #990000">;</span></tt></pre></div></div>
+<div class="paragraph"><p>Putting all that together, we now have the <code>x</code>, <code>y</code> coordinate in OpenGL space for this vertex.
+We put that in <code>gl_Position</code> and the vertex is done.</p></div>
+<div class="paragraph"><p>I&#8217;m sure you noticed that <code>gl_TessCoord.y</code> was unused, by not using this we just say every isoline gets drawn the same way.
+All the lines will be together and just look like one line.</p></div>
+<div class="paragraph"><p>The end result for four points looks like this.</p></div>
+<div class="paragraph"><p><span class="image">
+<img src="/resources/images/tessellation-shaders-isolines/slope-tessellation.png" alt="alt=slope-tessellation" />
+</span></p></div>
+</div>
+<div class="sect3">
+<h4 id="_curves">Curves</h4>
+<div class="paragraph"><p>The slope example can now be done with a curve.
+I won&#8217;t go over the details of how to calculate a Catmull-Rom Spline.
+But basically, we replace the slope equation, with the equation for a Catmull-Rom Spline.</p></div>
+<div class="listingblock">
+<div class="title">Slope Equation</div>
+<div class="content">
+<pre><tt>        <span style="color: #009900">float</span> slope <span style="color: #990000">=</span> <span style="color: #990000">(</span>p1<span style="color: #000080">.y</span> <span style="color: #990000">-</span> p0<span style="color: #000080">.y</span><span style="color: #990000">)</span> <span style="color: #990000">/</span> <span style="color: #990000">(</span>p1<span style="color: #000080">.x</span> <span style="color: #990000">-</span> p0<span style="color: #000080">.x</span><span style="color: #990000">);</span>
+        <span style="color: #009900">float</span> x <span style="color: #990000">=</span> <span style="color: #990000">((</span>p1<span style="color: #000080">.x</span> <span style="color: #990000">-</span> p0<span style="color: #000080">.x</span><span style="color: #990000">)</span> <span style="color: #990000">*</span> u<span style="color: #990000">)</span> <span style="color: #990000">+</span> p0<span style="color: #000080">.x</span><span style="color: #990000">;</span>
+        <span style="color: #009900">float</span> y <span style="color: #990000">=</span> <span style="color: #990000">(</span>u <span style="color: #990000">*</span> slope <span style="color: #990000">*</span> <span style="color: #990000">(</span>p1<span style="color: #000080">.x</span> <span style="color: #990000">-</span> p0<span style="color: #000080">.x</span><span style="color: #990000">))</span> <span style="color: #990000">+</span> p0<span style="color: #000080">.y</span><span style="color: #990000">;</span></tt></pre></div></div>
+<div class="paragraph"><p>Gets replaced with:</p></div>
+<div class="listingblock">
+<div class="title">Catmull-Rom Spline Equation</div>
+<div class="content">
+<pre><tt>        <span style="color: #009900">float</span> b0 <span style="color: #990000">=</span> <span style="color: #990000">(-</span><span style="color: #993399">1</span><span style="color: #990000">.</span>f <span style="color: #990000">*</span> u<span style="color: #990000">)</span> <span style="color: #990000">+</span> <span style="color: #990000">(</span><span style="color: #993399">2</span><span style="color: #990000">.</span>f <span style="color: #990000">*</span> u <span style="color: #990000">*</span> u<span style="color: #990000">)</span> <span style="color: #990000">+</span> <span style="color: #990000">(-</span><span style="color: #993399">1</span><span style="color: #990000">.</span>f <span style="color: #990000">*</span> u <span style="color: #990000">*</span> u <span style="color: #990000">*</span> u<span style="color: #990000">);</span>
+        <span style="color: #009900">float</span> b1 <span style="color: #990000">=</span> <span style="color: #990000">(</span><span style="color: #993399">2</span><span style="color: #990000">.</span>f<span style="color: #990000">)</span> <span style="color: #990000">+</span> <span style="color: #990000">(-</span><span style="color: #993399">5</span><span style="color: #990000">.</span>f <span style="color: #990000">*</span> u <span style="color: #990000">*</span> u<span style="color: #990000">)</span> <span style="color: #990000">+</span> <span style="color: #990000">(</span><span style="color: #993399">3</span><span style="color: #990000">.</span>f <span style="color: #990000">*</span> u <span style="color: #990000">*</span> u <span style="color: #990000">*</span> u<span style="color: #990000">);</span>
+        <span style="color: #009900">float</span> b2 <span style="color: #990000">=</span> <span style="color: #990000">(</span>u<span style="color: #990000">)</span> <span style="color: #990000">+</span> <span style="color: #990000">(</span><span style="color: #993399">4</span><span style="color: #990000">.</span>f <span style="color: #990000">*</span> u <span style="color: #990000">*</span> u<span style="color: #990000">)</span> <span style="color: #990000">+</span> <span style="color: #990000">(-</span><span style="color: #993399">3</span><span style="color: #990000">.</span>f <span style="color: #990000">*</span> u <span style="color: #990000">*</span> u <span style="color: #990000">*</span> u<span style="color: #990000">);</span>
+        <span style="color: #009900">float</span> b3 <span style="color: #990000">=</span> <span style="color: #990000">(-</span><span style="color: #993399">1</span><span style="color: #990000">.</span>f <span style="color: #990000">*</span> u <span style="color: #990000">*</span> u<span style="color: #990000">)</span> <span style="color: #990000">+</span> <span style="color: #990000">(</span>u <span style="color: #990000">*</span> u <span style="color: #990000">*</span> u<span style="color: #990000">);</span>
+        <span style="color: #009900">vec4</span> new_pos <span style="color: #990000">=</span> <span style="color: #993399">0</span><span style="color: #990000">.</span>5f <span style="color: #990000">*</span> <span style="color: #990000">(</span>b0<span style="color: #990000">*</span>p_1 <span style="color: #990000">+</span> b1<span style="color: #990000">*</span>p0 <span style="color: #990000">+</span> b2<span style="color: #990000">*</span>p1 <span style="color: #990000">+</span> b3<span style="color: #990000">*</span>p2<span style="color: #990000">);</span></tt></pre></div></div>
+<div class="paragraph"><p>And voila, the points for a curve are calculated.</p></div>
+</div>
+<div class="sect3">
+<h4 id="_using_the_gl_tesscoord_y_value">Using the gl_TessCoord.y Value</h4>
+<div class="paragraph"><p>You probably noticed, that so far the <code>gl_TessCoord.y</code> value hasn&#8217;t been used yet.
+This value, again, determines which isoline we&#8217;re on.
+We can use this value to slightly move each line so that they are in different locations.</p></div>
+<div class="listingblock">
+<div class="content">
+<pre><tt>        <span style="color: #009900">float</span> v <span style="color: #990000">=</span> gl_TessCoord<span style="color: #000080">.y</span><span style="color: #990000">;</span>
+        <span style="color: #000080">gl_Position</span> <span style="color: #990000">=</span> <span style="color: #009900">vec4</span><span style="color: #990000">(</span>new_pos<span style="color: #000080">.x</span> <span style="color: #990000">+</span> v <span style="color: #990000">*</span> <span style="color: #993399">0.08</span><span style="color: #990000">,</span> new_pos<span style="color: #000080">.y</span> <span style="color: #990000">+</span> v <span style="color: #990000">*</span> <span style="color: #993399">0.08</span><span style="color: #990000">,</span> new_pos<span style="color: #000080">.z</span><span style="color: #990000">,</span> new_pos<span style="color: #000080">.w</span><span style="color: #990000">);</span></tt></pre></div></div>
+<div class="paragraph"><p>So here we shift the calculated <code>x</code> and <code>y</code>, right and up respectively, based on the <code>gl_TessCoord.y</code> value.
+So for the first isoline, <code>v == 1</code>, the line will be translated rght and up by <code>0.08</code>.
+The second isoline, <code>v == 2</code>, will be translated right and up by <code>0.16</code> and so on.
+So each isoline gets placed in a slightly different location.
+The result of this is what you see in the final result.</p></div>
+<div class="paragraph"><p><span class="image">
+<img src="/resources/images/tessellation-shaders-isolines/catmull-rom-spline-demo.png" alt="alt=catmull-rom-spline-demo" />
+</span></p></div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_ignored_topics">Ignored Topics</h2>
+<div class="sectionbody">
+<div class="paragraph"><p>Because this topic was only focused on isolines, the other tessellations levels were not discussed.
+Those were not the only ignored relevant parameters.
+I don&#8217;t plan to cover them all in this article because it is already quite long, but I will at the very least acknowledge the topics that I have ignored:</p></div>
+<div class="ulist"><ul>
+<li>
+<p>
+Tessellation levels
+</p>
+<div class="ulist"><ul>
+<li>
+<p>
+<code>gl_TessLevelOuter[2]</code>
+</p>
+</li>
+<li>
+<p>
+<code>gl_TessLevelOuter[3]</code>
+</p>
+</li>
+<li>
+<p>
+<code>gl_TessLevelInner[0]</code>
+</p>
+</li>
+<li>
+<p>
+<code>gl_TessLevelInner[1]</code>
+</p>
+</li>
+</ul></div>
+</li>
+<li>
+<p>
+Patch types <code>triangles</code> and <code>quads</code>
+</p>
+</li>
+<li>
+<p>
+Per vertex attributes
+</p>
+<div class="ulist"><ul>
+<li>
+<p>
+<code>gl_PointSize</code>
+</p>
+</li>
+<li>
+<p>
+<code>gl_ClipDistance[]</code>
+</p>
+</li>
+</ul></div>
+</li>
+<li>
+<p>
+TES Spacing like <code>fractional_even_spacing</code> or <code>fractional_odd_spacing</code>
+</p>
+</li>
+<li>
+<p>
+Primitive ordering (not relevant at all for isolines)
+</p>
+</li>
+<li>
+<p>
+User-defined per vertex variables
+</p>
+</li>
+<li>
+<p>
+OpenGL patch parameters <code>GL_PATCH_DEFAULT_OUTER_LEVEL</code> and <code>GL_PATCH_DEFAULT_INNER_LEVEL</code>
+</p>
+</li>
+</ul></div>
+<div class="paragraph"><p>Information on all these topics are all online.
+For further reading I would recommend <a target="_blank" href="https://www.khronos.org/opengl/wiki/Tessellation">https://www.khronos.org/opengl/wiki/Tessellation</a>.</p></div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_references">References</h2>
+<div class="sectionbody">
+<div class="ulist"><ul>
+<li>
+<p>
+<a target="_blank" href="https://www.khronos.org/opengl/wiki/">https://www.khronos.org/opengl/wiki/</a>
+</p>
+</li>
+<li>
+<p>
+<a target="_blank" href="http://prideout.net/blog/?p=48">http://prideout.net/blog/?p=48</a>
+</p>
+</li>
+</ul></div>
+</div>
+</div>
+</div>
+
+            </div>
+        </div>
+    </div>
+    <footer>
+        <div class="github-link">
+            <a href="https://github.com/enochtsang" target="_blank">
+                <img src="/resources/images/github-icon.png" alt="github-icon">
+                github.com/enochtsang
+            </a>
+        </div>
+        <div class="email-link">
+            <a href="mailto:ECHTsang@gmail.com">
+                ECHTsang@gmail.com
+                <img src="/resources/images/email-icon.png" alt="email-icon"/>
+            </a>
+        </div>
+    </footer>
+    <div class="recaptcha-badge">
+        <div id='recaptcha' class="g-recaptcha"
+             data-sitekey="6LcIGx0UAAAAANO9ryEi6WTk9VzXKvJCRUPltQSm"
+             data-callback="recaptchaCallback"
+             data-size="invisible"></div>
+    </div>
+</body>
+</html>

@@ -10,6 +10,8 @@
 
 
 static Vec2  mousePos;
+static bool  mouseDown;
+
 Parms parms; 
 struct ShaderParms* pShaderParms;
 
@@ -18,7 +20,8 @@ static float t;
 static VkDrawIndirectCommand* drawParms;
 
 typedef struct {
-    uint32_t pointCount;
+    uint32_t totalPointCount;
+    uint32_t activePointCount;
     Vec3*    positions;
     Vec3*    colors;
 } Curve;
@@ -65,13 +68,12 @@ void g_Init(void)
     t = 0.0;
     drawParms = r_GetDrawParms();
     Tanto_R_Primitive* cprim = r_GetCurve();
-    curve.pointCount = cprim->vertexCount;
+    curve.totalPointCount = cprim->vertexCount;
+    curve.activePointCount = 0;
     curve.positions  = (Vec3*)cprim->vertexRegion.hostData;
     curve.colors = (Vec3*)(cprim->vertexRegion.hostData + cprim->attrOffsets[1]);
 
-    setColor((Vec3){0.1, 0.9, 0.3}, curve.pointCount, curve.colors);
-
-    setSpiral(curve.pointCount, curve.positions);
+    setColor((Vec3){0.1, 0.9, 0.3}, curve.totalPointCount, curve.colors);
 }
 
 void g_Responder(const Tanto_I_Event *event)
@@ -94,22 +96,34 @@ void g_Responder(const Tanto_I_Event *event)
         } break;
         case TANTO_I_MOUSEDOWN: 
         {
+            mouseDown = true;
         } break;
         case TANTO_I_MOUSEUP:
         {
+            mouseDown = false;
         } break;
         default: break;
     }
 }
 
+static void activatePoint(void)
+{
+    float x = mousePos.x * 2.0 - 1.0;
+    float y = mousePos.y * 2.0 - 1.0;
+    y *= -1;
+    curve.positions[curve.activePointCount] = (Vec3){x, y, 0.0};
+    curve.activePointCount++;
+}
+
 void g_Update(void)
 {
     t += 0.5;
-    printf("t: %f\n", t);
-    const int i = (int)t;
-    printf("i: %d\n", i);
-    const int pc = curve.pointCount; 
-    drawParms->vertexCount = i % (pc + 1);
-    printf("i mod pc: %d\n", i % pc);
+    if (mouseDown)
+    {
+        activatePoint();
+        mouseDown = false;
+    }
+    const int pc = curve.activePointCount; 
+    drawParms->vertexCount = pc;
 }
 

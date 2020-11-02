@@ -68,23 +68,6 @@ static void initOffscreenRenderTargets(void)
             VK_IMAGE_ASPECT_COLOR_BIT,
             SAMPLE_COUNT,
             VK_FILTER_NEAREST);
-    //
-    // seting render pass and depth attachment
-    //offscreenFrameBuffer.renderPass = offscreenRenderPass;
-
-    //const VkImageView attachments[] = {offscreenFrameBuffer.colorAttachment.view, offscreenFrameBuffer.depthAttachment.view};
-
-    //VkFramebufferCreateInfo framebufferInfo = {
-    //    .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-    //    .layers = 1,
-    //    .height = TANTO_WINDOW_HEIGHT,
-    //    .width  = TANTO_WINDOW_WIDTH,
-    //    .renderPass = offscreenFrameBuffer.renderPass,
-    //    .attachmentCount = 2,
-    //    .pAttachments = attachments
-    //};
-
-    //V_ASSERT( vkCreateFramebuffer(device, &framebufferInfo, NULL, &offscreenFrameBuffer.handle) );
 
     tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, &renderTargetColor);
 }
@@ -254,7 +237,7 @@ static void initPipelines(void)
             .renderPass = myRenderPass, 
             .vertexDescription = tanto_r_GetVertexDescription3D_Simple(),
             .polygonMode = VK_POLYGON_MODE_LINE,
-            .sampleCount = VK_SAMPLE_COUNT_8_BIT,
+            .sampleCount = SAMPLE_COUNT,
             .vertShader = SPVDIR"/template-vert.spv",
             .fragShader = SPVDIR"/template-frag.spv"
         }
@@ -266,7 +249,7 @@ static void initPipelines(void)
             .renderPass = myRenderPass, 
             .vertexDescription = tanto_r_GetVertexDescription3D_Simple(),
             .polygonMode = VK_POLYGON_MODE_POINT,
-            .sampleCount = VK_SAMPLE_COUNT_8_BIT,
+            .sampleCount = SAMPLE_COUNT,
             .vertShader = SPVDIR"/template-vert.spv",
             .fragShader = SPVDIR"/template-frag.spv"
         }
@@ -315,8 +298,8 @@ static void mainRender(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInf
     vkCmdDrawIndirect(*cmdBuf, drawCallParmsRegion.buffer, drawCallParmsRegion.offset, 1, sizeof(VkDrawIndexedIndirectCommand));
 
     // draw the curve as points 
-    //vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[R_PIPE_POINTS]);
-    //vkCmdDrawIndirect(*cmdBuf, drawCallParmsRegion.buffer, drawCallParmsRegion.offset, 1, sizeof(VkDrawIndexedIndirectCommand));
+    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[R_PIPE_POINTS]);
+    vkCmdDrawIndirect(*cmdBuf, drawCallParmsRegion.buffer, drawCallParmsRegion.offset, 1, sizeof(VkDrawIndexedIndirectCommand));
 
     assert(border.vertexCount > 0);
     // draw the border
