@@ -37,8 +37,10 @@ all: bin tags shaders
 
 FRAGS := $(patsubst %.frag,$(SPV)/%-frag.spv,$(notdir $(wildcard $(GLSL)/*.frag)))
 VERTS := $(patsubst %.vert,$(SPV)/%-vert.spv,$(notdir $(wildcard $(GLSL)/*.vert)))
+TESCS := $(patsubst %.tesc,$(SPV)/%-tesc.spv,$(notdir $(wildcard $(GLSL)/*.tesc)))
+TESES := $(patsubst %.tese,$(SPV)/%-tese.spv,$(notdir $(wildcard $(GLSL)/*.tese)))
 
-shaders: $(FRAGS) $(VERTS)
+shaders: $(FRAGS) $(VERTS) $(TESCS) $(TESES)
 
 clean: 
 	rm -f $(O)/* $(LIB)/$(LIBNAME) $(BIN)/* $(SPV)/*
@@ -62,6 +64,12 @@ $(SPV)/%-vert.spv: $(GLSL)/%.vert $(DEPS)
 	$(GLC) $(GLFLAGS) $< -o $@
 
 $(SPV)/%-frag.spv: $(GLSL)/%.frag
+	$(GLC) $(GLFLAGS) $< -o $@
+
+$(SPV)/%-tesc.spv: $(GLSL)/%.tesc
+	$(GLC) $(GLFLAGS) $< -o $@
+
+$(SPV)/%-tese.spv: $(GLSL)/%.tese
 	$(GLC) $(GLFLAGS) $< -o $@
 
 $(SPV)/%-rchit.spv: $(GLSL)/%.rchit

@@ -16,7 +16,8 @@
 #include <tanto/t_utils.h>
 #include <tanto/i_input.h>
 
-#define NS_TARGET 16666666 // 1 / 60 seconds
+//#define NS_TARGET 16666666 // 1 / 60 seconds
+#define NS_TARGET 366666666 // 1 / 60 seconds
 
 void curva_Init(void)
 {

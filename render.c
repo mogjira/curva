@@ -217,7 +217,7 @@ static void initPipelines(void)
         .bindings = {{
             .descriptorCount = 1,
             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
         }}
     }};
 
@@ -238,8 +238,11 @@ static void initPipelines(void)
             .vertexDescription = tanto_r_GetVertexDescription3D_Simple(),
             .polygonMode = VK_POLYGON_MODE_LINE,
             .sampleCount = SAMPLE_COUNT,
-            .vertShader = SPVDIR"/template-vert.spv",
-            .fragShader = SPVDIR"/template-frag.spv"
+            .tesselationPatchPoints = 3,
+            .vertShader = SPVDIR"/curve-vert.spv",
+            .fragShader = SPVDIR"/template-frag.spv",
+            .tessCtrlShader = SPVDIR"/passthrough-tesc.spv",
+            .tessEvalShader = SPVDIR"/basic-tese.spv"
         }
     },{
         .id       = R_PIPE_POINTS,
@@ -250,8 +253,8 @@ static void initPipelines(void)
             .vertexDescription = tanto_r_GetVertexDescription3D_Simple(),
             .polygonMode = VK_POLYGON_MODE_POINT,
             .sampleCount = SAMPLE_COUNT,
-            .vertShader = SPVDIR"/template-vert.spv",
-            .fragShader = SPVDIR"/template-frag.spv"
+            .vertShader = SPVDIR"/points-vert.spv",
+            .fragShader = SPVDIR"/template-frag.spv",
         }
     }};
 
@@ -303,9 +306,9 @@ static void mainRender(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInf
 
     assert(border.vertexCount > 0);
     // draw the border
-    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[R_PIPE_LINES]);
-    vkCmdBindVertexBuffers(*cmdBuf, 0, 2, vertBuffersBorder, attrOffsetsBorder);
-    vkCmdDraw(*cmdBuf, border.vertexCount, 1, 0, 0);
+    //vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[R_PIPE_LINES]);
+    //vkCmdBindVertexBuffers(*cmdBuf, 0, 2, vertBuffersBorder, attrOffsetsBorder);
+    //vkCmdDraw(*cmdBuf, border.vertexCount, 1, 0, 0);
 
     vkCmdEndRenderPass(*cmdBuf);
 }
