@@ -272,8 +272,6 @@ static void mainRender(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInf
         0, 1, &descriptorSets[R_DESC_SET_MAIN],
         0, NULL);
 
-    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[R_PIPE_LINES]);
-
     vkCmdBeginRenderPass(*cmdBuf, rpassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
     const VkBuffer vertBuffersCurve[2] = {
@@ -297,6 +295,7 @@ static void mainRender(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInf
     };
 
     // draw the curve as lines
+    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[R_PIPE_LINES]);
     vkCmdBindVertexBuffers(*cmdBuf, 0, 2, vertBuffersCurve, attrOffsetsCurve);
     vkCmdDrawIndirect(*cmdBuf, drawCallParmsRegion.buffer, drawCallParmsRegion.offset, 1, sizeof(VkDrawIndexedIndirectCommand));
 
