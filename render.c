@@ -25,27 +25,30 @@ static VkRenderPass  myRenderPass;
 static VkFramebuffer framebuffers[TANTO_FRAME_COUNT];
 
 static Tanto_V_BufferRegion uniformBufferRegion;
-static Tanto_V_BufferRegion drawCallParmsRegion;
+
+static Tanto_V_BufferRegion drawCmdCurves;
+static Tanto_V_BufferRegion drawCmdLines;
+static Tanto_V_BufferRegion drawCmdPoints;
 
 static Tanto_R_Primitive points;
 static Tanto_R_Primitive border;
 
 static const VkSampleCountFlags SAMPLE_COUNT = VK_SAMPLE_COUNT_8_BIT;
 
+static const uint32_t pointsPerPatch = 3;
+
 typedef enum {
+    R_PIPE_CURVES,
     R_PIPE_LINES,
     R_PIPE_POINTS,
-//    R_PIPE_POST
 } R_PipelineId;
 
 typedef enum {
     R_PIPE_LAYOUT_MAIN,
-//    R_PIPE_LAYOUT_POST
 } R_PipelineLayoutId;
 
 typedef enum {
     R_DESC_SET_MAIN,
-    //R_DESC_SET_POST
 } R_DescriptorSetId;
 
 // TODO: we should implement a way to specify the offscreen renderpass format at initialization
@@ -175,7 +178,7 @@ static void updateStaticDescriptors(void)
 {
     uniformBufferRegion = tanto_v_RequestBufferRegion(sizeof(UniformBuffer), 
             VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
-    memset(uniformBufferRegion.hostData, 0, sizeof(Parms));
+    memset(uniformBufferRegion.hostData, 0, sizeof(UniformBuffer));
     UniformBuffer* uboData = (UniformBuffer*)(uniformBufferRegion.hostData);
 
     Mat4 view = m_Ident_Mat4();
@@ -205,8 +208,22 @@ static void updateStaticDescriptors(void)
     vkUpdateDescriptorSets(device, TANTO_ARRAY_SIZE(writes), writes, 0, NULL);
 }
 
-static void updateDynamicDescriptors(void)
+static void initIndirectCmdStorage(void)
 {
+    drawCmdCurves = tanto_v_RequestBufferRegion(sizeof(VkDrawIndirectCommand), 0, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
+    drawCmdLines  = tanto_v_RequestBufferRegion(sizeof(VkDrawIndirectCommand), 0, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
+    drawCmdPoints = tanto_v_RequestBufferRegion(sizeof(VkDrawIndirectCommand), 0, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
+
+    VkDrawIndirectCommand cmd = {
+        .firstInstance = 0,
+        .firstVertex = 0,
+        .instanceCount = 1,
+        .vertexCount = points.vertexCount,
+    };
+
+    memcpy(drawCmdCurves.hostData, &cmd, sizeof(VkDrawIndirectCommand));
+    memcpy(drawCmdLines.hostData,  &cmd, sizeof(VkDrawIndirectCommand));
+    memcpy(drawCmdPoints.hostData, &cmd, sizeof(VkDrawIndirectCommand));
 }
 
 static void initPipelines(void)
@@ -217,7 +234,7 @@ static void initPipelines(void)
         .bindings = {{
             .descriptorCount = 1,
             .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT
+            .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT | VK_SHADER_STAGE_FRAGMENT_BIT
         }}
     }};
 
@@ -230,6 +247,21 @@ static void initPipelines(void)
     }};
 
     const Tanto_R_PipelineInfo pipeInfos[] = {{
+        .id       = R_PIPE_CURVES,
+        .type     = TANTO_R_PIPELINE_RASTER_TYPE,
+        .layoutId = R_PIPE_LAYOUT_MAIN,
+        .payload.rasterInfo = {
+            .renderPass = myRenderPass, 
+            .vertexDescription = tanto_r_GetVertexDescription3D_Simple(),
+            .polygonMode = VK_POLYGON_MODE_LINE,
+            .sampleCount = SAMPLE_COUNT,
+            .tesselationPatchPoints = pointsPerPatch,
+            .vertShader = SPVDIR"/curve-vert.spv",
+            .fragShader = SPVDIR"/color-frag.spv",
+            .tessCtrlShader = SPVDIR"/passthrough-tesc.spv",
+            .tessEvalShader = SPVDIR"/basic-tese.spv"
+        }
+    },{
         .id       = R_PIPE_LINES,
         .type     = TANTO_R_PIPELINE_RASTER_TYPE,
         .layoutId = R_PIPE_LAYOUT_MAIN,
@@ -238,11 +270,8 @@ static void initPipelines(void)
             .vertexDescription = tanto_r_GetVertexDescription3D_Simple(),
             .polygonMode = VK_POLYGON_MODE_LINE,
             .sampleCount = SAMPLE_COUNT,
-            .tesselationPatchPoints = 3,
-            .vertShader = SPVDIR"/curve-vert.spv",
-            .fragShader = SPVDIR"/template-frag.spv",
-            .tessCtrlShader = SPVDIR"/passthrough-tesc.spv",
-            .tessEvalShader = SPVDIR"/basic-tese.spv"
+            .vertShader = SPVDIR"/points-vert.spv",
+            .fragShader = SPVDIR"/color-frag.spv",
         }
     },{
         .id       = R_PIPE_POINTS,
@@ -254,7 +283,7 @@ static void initPipelines(void)
             .polygonMode = VK_POLYGON_MODE_POINT,
             .sampleCount = SAMPLE_COUNT,
             .vertShader = SPVDIR"/points-vert.spv",
-            .fragShader = SPVDIR"/template-frag.spv",
+            .fragShader = SPVDIR"/color-frag.spv",
         }
     }};
 
@@ -294,20 +323,20 @@ static void mainRender(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInf
         border.attrOffsets[1] + border.vertexRegion.offset,
     };
 
-    // draw the curve as lines
-    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[R_PIPE_LINES]);
+    // draw the curves
+    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[R_PIPE_CURVES]);
     vkCmdBindVertexBuffers(*cmdBuf, 0, 2, vertBuffersCurve, attrOffsetsCurve);
-    vkCmdDrawIndirect(*cmdBuf, drawCallParmsRegion.buffer, drawCallParmsRegion.offset, 1, sizeof(VkDrawIndexedIndirectCommand));
+    vkCmdDrawIndirect(*cmdBuf, drawCmdCurves.buffer, drawCmdCurves.offset, 1, sizeof(VkDrawIndexedIndirectCommand));
 
-    // draw the curve as points 
+    // draw the points 
     vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[R_PIPE_POINTS]);
-    vkCmdDrawIndirect(*cmdBuf, drawCallParmsRegion.buffer, drawCallParmsRegion.offset, 1, sizeof(VkDrawIndexedIndirectCommand));
+    vkCmdDrawIndirect(*cmdBuf, drawCmdPoints.buffer, drawCmdPoints.offset, 1, sizeof(VkDrawIndexedIndirectCommand));
 
     assert(border.vertexCount > 0);
     // draw the border
-    //vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[R_PIPE_LINES]);
-    //vkCmdBindVertexBuffers(*cmdBuf, 0, 2, vertBuffersBorder, attrOffsetsBorder);
-    //vkCmdDraw(*cmdBuf, border.vertexCount, 1, 0, 0);
+    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[R_PIPE_LINES]);
+    vkCmdBindVertexBuffers(*cmdBuf, 0, 2, vertBuffersBorder, attrOffsetsBorder);
+    vkCmdDraw(*cmdBuf, border.vertexCount, 1, 0, 0);
 
     vkCmdEndRenderPass(*cmdBuf);
 }
@@ -334,28 +363,25 @@ static void initPrimitives(void)
     points = tanto_r_CreatePoints(pointCount);
 }
 
-static void initIndirectCmdStorage(void)
+VkDrawIndirectCommand* r_GetDrawCmd(const R_Draw_Cmd_Type type)
 {
-    drawCallParmsRegion = tanto_v_RequestBufferRegion(sizeof(VkDrawIndirectCommand), 0, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
-
-    VkDrawIndirectCommand cmd = {
-        .firstInstance = 0,
-        .firstVertex = 0,
-        .instanceCount = 1,
-        .vertexCount = points.vertexCount,
-    };
-
-    memcpy(drawCallParmsRegion.hostData, &cmd, sizeof(VkDrawIndirectCommand));
-}
-
-VkDrawIndirectCommand* r_GetDrawParms(void)
-{
-    return (VkDrawIndirectCommand*)(drawCallParmsRegion.hostData);
+    switch (type) 
+    {
+        case CURVES_TYPE: return (VkDrawIndirectCommand*)(drawCmdCurves.hostData);
+        case LINES_TYPE:  return (VkDrawIndirectCommand*)(drawCmdLines.hostData);
+        case POINTS_TYPE: return (VkDrawIndirectCommand*)(drawCmdPoints.hostData);
+    }
+    return NULL;
 }
 
 Tanto_R_Primitive* r_GetCurve(void)
 {
     return &points;
+}
+
+UniformBuffer* r_GetUBO(void)
+{
+    return (UniformBuffer*)uniformBufferRegion.hostData;
 }
 
 void r_InitRenderer()

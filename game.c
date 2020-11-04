@@ -11,13 +11,18 @@
 
 static Vec2  mousePos;
 static bool  mouseDown;
+static bool  showPoints;
 
 Parms parms; 
 struct ShaderParms* pShaderParms;
 
+UniformBuffer* ubo;
+
 static float t;
 
-static VkDrawIndirectCommand* drawParms;
+static VkDrawIndirectCommand* drawCmdCurves;
+static VkDrawIndirectCommand* drawCmdLines;
+static VkDrawIndirectCommand* drawCmdPoints;
 
 typedef struct {
     uint32_t totalPointCount;
@@ -66,12 +71,17 @@ void g_Init(void)
 {
     parms.shouldRun = true;
     t = 0.0;
-    drawParms = r_GetDrawParms();
+    drawCmdCurves = r_GetDrawCmd(CURVES_TYPE);
+    drawCmdLines =  r_GetDrawCmd(LINES_TYPE);
+    drawCmdPoints = r_GetDrawCmd(POINTS_TYPE);
     Tanto_R_Primitive* cprim = r_GetCurve();
     curve.totalPointCount = cprim->vertexCount;
     curve.activePointCount = 0;
     curve.positions  = (Vec3*)cprim->vertexRegion.hostData;
     curve.colors = (Vec3*)(cprim->vertexRegion.hostData + cprim->attrOffsets[1]);
+
+    showPoints = true;
+    ubo = r_GetUBO();
 
     setColor((Vec3){0.1, 0.9, 0.3}, curve.totalPointCount, curve.colors);
 }
@@ -83,6 +93,7 @@ void g_Responder(const Tanto_I_Event *event)
         case TANTO_I_KEYDOWN: switch (event->data.keyCode)
         {
             case TANTO_KEY_ESC: parms.shouldRun = false; break;
+            case TANTO_KEY_E: showPoints = showPoints ? false : true; break;
             default: return;
         } break;
         case TANTO_I_KEYUP:   switch (event->data.keyCode)
@@ -124,6 +135,8 @@ void g_Update(void)
         mouseDown = false;
     }
     const int pc = curve.activePointCount; 
-    drawParms->vertexCount = pc;
+    drawCmdCurves->vertexCount = pc;
+    drawCmdLines->vertexCount = pc;
+    drawCmdPoints->vertexCount = showPoints ? pc : 0;
 }
 

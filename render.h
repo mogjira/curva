@@ -15,12 +15,20 @@ typedef struct {
     Mat4 matProj;
 } UniformBuffer;
 
+typedef enum {
+    CURVES_TYPE,
+    LINES_TYPE,
+    POINTS_TYPE,
+} R_Draw_Cmd_Type;
+
 void  r_InitRenderer(void);
 void  r_UpdateRenderCommands(void);
 void  r_LoadMesh(Tanto_R_Mesh mesh);
 void  r_ClearMesh(void);
 void  r_CleanUp(void);
-VkDrawIndirectCommand* r_GetDrawParms(void);
+
+VkDrawIndirectCommand* r_GetDrawCmd(const R_Draw_Cmd_Type);
 Tanto_R_Primitive* r_GetCurve(void);
+UniformBuffer* r_GetUBO(void);
 
 #endif /* end of include guard: R_COMMANDS_H */
