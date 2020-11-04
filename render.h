@@ -28,6 +28,7 @@ void  r_ClearMesh(void);
 void  r_CleanUp(void);
 
 VkDrawIndirectCommand* r_GetDrawCmd(const R_Draw_Cmd_Type);
+VkDrawIndexedIndirectCommand* r_GetDrawIndexedCmd(const R_Draw_Cmd_Type type);
 Tanto_R_Primitive* r_GetCurve(void);
 UniformBuffer* r_GetUBO(void);
 

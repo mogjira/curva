@@ -12,6 +12,7 @@
 static Vec2  mousePos;
 static bool  mouseDown;
 static bool  showPoints;
+static bool  showLines;
 
 Parms parms; 
 struct ShaderParms* pShaderParms;
@@ -20,13 +21,14 @@ UniformBuffer* ubo;
 
 static float t;
 
-static VkDrawIndirectCommand* drawCmdCurves;
+static VkDrawIndexedIndirectCommand* drawCmdCurves;
 static VkDrawIndirectCommand* drawCmdLines;
 static VkDrawIndirectCommand* drawCmdPoints;
 
 typedef struct {
     uint32_t totalPointCount;
     uint32_t activePointCount;
+    uint32_t activeIndexCount;
     Vec3*    positions;
     Vec3*    colors;
 } Curve;
@@ -71,7 +73,7 @@ void g_Init(void)
 {
     parms.shouldRun = true;
     t = 0.0;
-    drawCmdCurves = r_GetDrawCmd(CURVES_TYPE);
+    drawCmdCurves = r_GetDrawIndexedCmd(CURVES_TYPE);
     drawCmdLines =  r_GetDrawCmd(LINES_TYPE);
     drawCmdPoints = r_GetDrawCmd(POINTS_TYPE);
     Tanto_R_Primitive* cprim = r_GetCurve();
@@ -81,6 +83,7 @@ void g_Init(void)
     curve.colors = (Vec3*)(cprim->vertexRegion.hostData + cprim->attrOffsets[1]);
 
     showPoints = true;
+    showLines  = true;
     ubo = r_GetUBO();
 
     setColor((Vec3){0.1, 0.9, 0.3}, curve.totalPointCount, curve.colors);
@@ -94,6 +97,7 @@ void g_Responder(const Tanto_I_Event *event)
         {
             case TANTO_KEY_ESC: parms.shouldRun = false; break;
             case TANTO_KEY_E: showPoints = showPoints ? false : true; break;
+            case TANTO_KEY_R: showLines  = showLines  ? false : true; break;
             default: return;
         } break;
         case TANTO_I_KEYUP:   switch (event->data.keyCode)
@@ -124,6 +128,13 @@ static void activatePoint(void)
     y *= -1;
     curve.positions[curve.activePointCount] = (Vec3){x, y, 0.0};
     curve.activePointCount++;
+    curve.activeIndexCount++;
+    if (curve.activePointCount % 3 == 0)
+        curve.activeIndexCount++;
+    if (curve.activePointCount > 3 && (curve.activeIndexCount - curve.activePointCount) % 3 == 0)
+        curve.activeIndexCount++;
+    printf("Vertex count: %d\n", curve.activePointCount);
+    printf("Index  count: %d\n", curve.activeIndexCount);
 }
 
 void g_Update(void)
@@ -135,8 +146,9 @@ void g_Update(void)
         mouseDown = false;
     }
     const int pc = curve.activePointCount; 
-    drawCmdCurves->vertexCount = pc;
-    drawCmdLines->vertexCount = pc;
+    const int ic = curve.activeIndexCount; 
+    drawCmdCurves->indexCount = ic;
+    drawCmdLines->vertexCount  = showLines  ? pc : 0;
     drawCmdPoints->vertexCount = showPoints ? pc : 0;
 }
 

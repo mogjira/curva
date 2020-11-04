@@ -30,7 +30,7 @@ static Tanto_V_BufferRegion drawCmdCurves;
 static Tanto_V_BufferRegion drawCmdLines;
 static Tanto_V_BufferRegion drawCmdPoints;
 
-static Tanto_R_Primitive points;
+static Tanto_R_Primitive curve;
 static Tanto_R_Primitive border;
 
 static const VkSampleCountFlags SAMPLE_COUNT = VK_SAMPLE_COUNT_8_BIT;
@@ -210,20 +210,28 @@ static void updateStaticDescriptors(void)
 
 static void initIndirectCmdStorage(void)
 {
-    drawCmdCurves = tanto_v_RequestBufferRegion(sizeof(VkDrawIndirectCommand), 0, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
+    drawCmdCurves = tanto_v_RequestBufferRegion(sizeof(VkDrawIndexedIndirectCommand), 0, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
     drawCmdLines  = tanto_v_RequestBufferRegion(sizeof(VkDrawIndirectCommand), 0, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
     drawCmdPoints = tanto_v_RequestBufferRegion(sizeof(VkDrawIndirectCommand), 0, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
 
-    VkDrawIndirectCommand cmd = {
+    VkDrawIndirectCommand draw = {
         .firstInstance = 0,
         .firstVertex = 0,
         .instanceCount = 1,
-        .vertexCount = points.vertexCount,
+        .vertexCount = curve.vertexCount,
     };
 
-    memcpy(drawCmdCurves.hostData, &cmd, sizeof(VkDrawIndirectCommand));
-    memcpy(drawCmdLines.hostData,  &cmd, sizeof(VkDrawIndirectCommand));
-    memcpy(drawCmdPoints.hostData, &cmd, sizeof(VkDrawIndirectCommand));
+    VkDrawIndexedIndirectCommand drawIndexed = {
+        .firstIndex = 0,
+        .indexCount = curve.indexCount,
+        .vertexOffset = 0,
+        .firstInstance = 0,
+        .instanceCount = 1,
+    };
+
+    memcpy(drawCmdCurves.hostData, &drawIndexed, sizeof(VkDrawIndexedIndirectCommand));
+    memcpy(drawCmdLines.hostData,  &draw, sizeof(VkDrawIndirectCommand));
+    memcpy(drawCmdPoints.hostData, &draw, sizeof(VkDrawIndirectCommand));
 }
 
 static void initPipelines(void)
@@ -292,55 +300,6 @@ static void initPipelines(void)
     tanto_r_InitPipelines(pipeInfos, TANTO_ARRAY_SIZE(pipeInfos));
 }
 
-static void mainRender(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo* rpassInfo)
-{
-    vkCmdBindDescriptorSets(
-        *cmdBuf, 
-        VK_PIPELINE_BIND_POINT_GRAPHICS, 
-        pipelineLayouts[R_PIPE_LAYOUT_MAIN], 
-        0, 1, &descriptorSets[R_DESC_SET_MAIN],
-        0, NULL);
-
-    vkCmdBeginRenderPass(*cmdBuf, rpassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-    const VkBuffer vertBuffersCurve[2] = {
-        points.vertexRegion.buffer,
-        points.vertexRegion.buffer
-    };
-
-    const VkDeviceSize attrOffsetsCurve[2] = {
-        points.attrOffsets[0] + points.vertexRegion.offset,
-        points.attrOffsets[1] + points.vertexRegion.offset,
-    };
-
-    const VkBuffer vertBuffersBorder[2] = {
-        border.vertexRegion.buffer,
-        border.vertexRegion.buffer
-    };
-
-    const VkDeviceSize attrOffsetsBorder[2] = {
-        border.attrOffsets[0] + border.vertexRegion.offset,
-        border.attrOffsets[1] + border.vertexRegion.offset,
-    };
-
-    // draw the curves
-    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[R_PIPE_CURVES]);
-    vkCmdBindVertexBuffers(*cmdBuf, 0, 2, vertBuffersCurve, attrOffsetsCurve);
-    vkCmdDrawIndirect(*cmdBuf, drawCmdCurves.buffer, drawCmdCurves.offset, 1, sizeof(VkDrawIndexedIndirectCommand));
-
-    // draw the points 
-    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[R_PIPE_POINTS]);
-    vkCmdDrawIndirect(*cmdBuf, drawCmdPoints.buffer, drawCmdPoints.offset, 1, sizeof(VkDrawIndexedIndirectCommand));
-
-    assert(border.vertexCount > 0);
-    // draw the border
-    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[R_PIPE_LINES]);
-    vkCmdBindVertexBuffers(*cmdBuf, 0, 2, vertBuffersBorder, attrOffsetsBorder);
-    vkCmdDraw(*cmdBuf, border.vertexCount, 1, 0, 0);
-
-    vkCmdEndRenderPass(*cmdBuf);
-}
-
 static void initPrimitives(void)
 {
     //create border
@@ -360,23 +319,87 @@ static void initPrimitives(void)
 
     //create curve
     const size_t pointCount = 400;
-    points = tanto_r_CreatePoints(pointCount);
+    curve = tanto_r_CreateCurve(pointCount, pointsPerPatch, 1);
+}
+
+static void mainRender(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo* rpassInfo)
+{
+    vkCmdBindDescriptorSets(
+        *cmdBuf, 
+        VK_PIPELINE_BIND_POINT_GRAPHICS, 
+        pipelineLayouts[R_PIPE_LAYOUT_MAIN], 
+        0, 1, &descriptorSets[R_DESC_SET_MAIN],
+        0, NULL);
+
+    vkCmdBeginRenderPass(*cmdBuf, rpassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    const VkBuffer vertBuffersCurve[2] = {
+        curve.vertexRegion.buffer,
+        curve.vertexRegion.buffer
+    };
+
+    const VkDeviceSize attrOffsetsCurve[2] = {
+        curve.attrOffsets[0] + curve.vertexRegion.offset,
+        curve.attrOffsets[1] + curve.vertexRegion.offset,
+    };
+
+    const VkBuffer vertBuffersBorder[2] = {
+        border.vertexRegion.buffer,
+        border.vertexRegion.buffer
+    };
+
+    const VkDeviceSize attrOffsetsBorder[2] = {
+        border.attrOffsets[0] + border.vertexRegion.offset,
+        border.attrOffsets[1] + border.vertexRegion.offset,
+    };
+
+    // draw the curves
+    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[R_PIPE_CURVES]);
+    vkCmdBindVertexBuffers(*cmdBuf, 0, 2, vertBuffersCurve, attrOffsetsCurve);
+    vkCmdBindIndexBuffer(*cmdBuf, curve.indexRegion.buffer, curve.indexRegion.offset, VK_INDEX_TYPE_UINT32);
+    vkCmdDrawIndexedIndirect(*cmdBuf, drawCmdCurves.buffer, drawCmdCurves.offset, 1, sizeof(VkDrawIndexedIndirectCommand));
+
+    // draw the points 
+    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[R_PIPE_POINTS]);
+    vkCmdDrawIndirect(*cmdBuf, drawCmdPoints.buffer, drawCmdPoints.offset, 1, sizeof(VkDrawIndirectCommand));
+
+    assert(border.vertexCount > 0);
+
+    // draw the lines
+    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelines[R_PIPE_LINES]);
+    vkCmdDrawIndirect(*cmdBuf, drawCmdLines.buffer, drawCmdLines.offset, 1, sizeof(VkDrawIndirectCommand));
+    
+    // draw the border
+    vkCmdBindVertexBuffers(*cmdBuf, 0, 2, vertBuffersBorder, attrOffsetsBorder);
+    vkCmdDraw(*cmdBuf, border.vertexCount, 1, 0, 0);
+
+    vkCmdEndRenderPass(*cmdBuf);
 }
 
 VkDrawIndirectCommand* r_GetDrawCmd(const R_Draw_Cmd_Type type)
 {
     switch (type) 
     {
-        case CURVES_TYPE: return (VkDrawIndirectCommand*)(drawCmdCurves.hostData);
         case LINES_TYPE:  return (VkDrawIndirectCommand*)(drawCmdLines.hostData);
         case POINTS_TYPE: return (VkDrawIndirectCommand*)(drawCmdPoints.hostData);
+        default: assert(0);
+    }
+    return NULL;
+}
+
+VkDrawIndexedIndirectCommand* r_GetDrawIndexedCmd(const R_Draw_Cmd_Type type)
+{
+    switch (type) 
+    {
+        case CURVES_TYPE: return (VkDrawIndexedIndirectCommand*)(drawCmdCurves.hostData);
+        default: assert(0);
     }
     return NULL;
 }
 
 Tanto_R_Primitive* r_GetCurve(void)
 {
-    return &points;
+    return &curve;
 }
 
 UniformBuffer* r_GetUBO(void)
