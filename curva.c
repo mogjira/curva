@@ -87,7 +87,7 @@ void curva_StartLoop(void)
 
         tanto_LoopStatsUpdate(&timer, &stats);
 
-        //printf("Delta ns: %ld\n", stats.nsDelta);
+        printf("Delta ns: %ld\n", stats.nsDelta);
 
         tanto_LoopSleep(&stats, NS_TARGET);
     }

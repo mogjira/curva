@@ -14,6 +14,6 @@ layout(set = 0, binding = 0) uniform Matrices {
 void main()
 {
     gl_Position = matrices.proj * matrices.view * matrices.model * vec4(pos, 1.0);
-    gl_PointSize = 8.0;
+    gl_PointSize = 1.0;
     outColor = color;
 }

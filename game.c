@@ -7,6 +7,7 @@
 #include <string.h>
 #include <tanto/t_def.h>
 #include <tanto/i_input.h>
+#include <stdlib.h>
 
 
 static Vec2  mousePos;
@@ -61,6 +62,23 @@ static void setLine(const uint32_t pointCount, Vec3* pos)
     }
 }
 
+static void setRandomLine(const uint32_t pointCount, const uint32_t offset,
+        const float height, const float amp,  Vec3* pos)
+{
+    assert(offset + pointCount <= curve.totalPointCount);
+    float x = -1.0;
+    float y = 0.0;
+    const float step = 2.0 / pointCount;
+    for (int i = offset; i < pointCount + offset; i++) 
+    {
+        y = random() / (float)RAND_MAX * 2.0 - 1.0;
+        y *= amp;
+        y += height;
+        pos[i] = (Vec3){x, y, 0.0};
+        x += step;
+    }
+}
+
 static void setColor(const Vec3 c, const uint32_t pointCount, Vec3* colors)
 {
     for (int i = 0; i < pointCount; i++) 
@@ -86,7 +104,14 @@ void g_Init(void)
     showLines  = true;
     ubo = r_GetUBO();
 
+    srandom(5);
     setColor((Vec3){0.1, 0.9, 0.3}, curve.totalPointCount, curve.colors);
+    setRandomLine(200, 0,   0.66, 0.2, curve.positions);
+    setRandomLine(200, 200, 0.33, 0.2, curve.positions);
+    setRandomLine(200, 400, 0.,   0.2, curve.positions);
+    setRandomLine(200, 600,-0.33, 0.2, curve.positions);
+    setRandomLine(200, 800,-0.66, 0.2, curve.positions);
+    //setSpiral(curve.totalPointCount, curve.positions);
 }
 
 void g_Responder(const Tanto_I_Event *event)
@@ -121,32 +146,47 @@ void g_Responder(const Tanto_I_Event *event)
     }
 }
 
-static void activatePoint(void)
+static void addPoint(float x, float y)
 {
-    float x = mousePos.x * 2.0 - 1.0;
-    float y = mousePos.y * 2.0 - 1.0;
-    y *= -1;
     curve.positions[curve.activePointCount] = (Vec3){x, y, 0.0};
     curve.activePointCount++;
-    curve.activeIndexCount++;
-    if (curve.activePointCount % 3 == 0)
+}
+
+static void incrementIndices(void)
+{
+    if (curve.activePointCount <= 4)
         curve.activeIndexCount++;
-    if (curve.activePointCount > 3 && (curve.activeIndexCount - curve.activePointCount) % 3 == 0)
-        curve.activeIndexCount++;
-    printf("Vertex count: %d\n", curve.activePointCount);
-    printf("Index  count: %d\n", curve.activeIndexCount);
+    else
+        curve.activeIndexCount += 4;
+}
+
+static void activatePoint(void)
+{
+    curve.activePointCount++;
+    incrementIndices();
+    if (curve.activePointCount > curve.totalPointCount)
+    {
+        curve.activePointCount = 0;
+        curve.activeIndexCount = 0;
+        printf("Reset curve to prevent overflow\n");
+    }
 }
 
 void g_Update(void)
 {
-    t += 0.5;
+    t += 1.0;
     if (mouseDown)
     {
-        activatePoint();
+        addPoint(mousePos.x * 2.0 - 1.0, mousePos.y * -2.0 + 1.0);
+        incrementIndices();
         mouseDown = false;
     }
-    const int pc = curve.activePointCount; 
-    const int ic = curve.activeIndexCount; 
+    if ((int)t % 1 == 0) 
+    {
+        activatePoint();
+    }
+    int pc = curve.activePointCount; 
+    int ic = curve.activeIndexCount; 
     drawCmdCurves->indexCount = ic;
     drawCmdLines->vertexCount  = showLines  ? pc : 0;
     drawCmdPoints->vertexCount = showPoints ? pc : 0;

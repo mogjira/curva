@@ -35,7 +35,9 @@ static Tanto_R_Primitive border;
 
 static const VkSampleCountFlags SAMPLE_COUNT = VK_SAMPLE_COUNT_8_BIT;
 
-static const uint32_t pointsPerPatch = 3;
+static const uint32_t maxPointsPerCurve = 1000;
+const uint32_t r_pointsPerPatch = 4;
+const uint32_t r_restartOffset  = 3;
 
 typedef enum {
     R_PIPE_CURVES,
@@ -263,11 +265,11 @@ static void initPipelines(void)
             .vertexDescription = tanto_r_GetVertexDescription3D_Simple(),
             .polygonMode = VK_POLYGON_MODE_LINE,
             .sampleCount = SAMPLE_COUNT,
-            .tesselationPatchPoints = pointsPerPatch,
-            .vertShader = SPVDIR"/curve-vert.spv",
+            .tesselationPatchPoints = r_pointsPerPatch,
+            .vertShader = SPVDIR"/points-vert.spv",
             .fragShader = SPVDIR"/color-frag.spv",
-            .tessCtrlShader = SPVDIR"/passthrough-tesc.spv",
-            .tessEvalShader = SPVDIR"/basic-tese.spv"
+            .tessCtrlShader = SPVDIR"/catmul-tesc.spv",
+            .tessEvalShader = SPVDIR"/catmul-tese.spv"
         }
     },{
         .id       = R_PIPE_LINES,
@@ -318,8 +320,7 @@ static void initPrimitives(void)
     }
 
     //create curve
-    const size_t pointCount = 400;
-    curve = tanto_r_CreateCurve(pointCount, pointsPerPatch, 1);
+    curve = tanto_r_CreateCurve(maxPointsPerCurve, r_pointsPerPatch, r_restartOffset);
 }
 
 static void mainRender(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo* rpassInfo)

@@ -32,4 +32,7 @@ VkDrawIndexedIndirectCommand* r_GetDrawIndexedCmd(const R_Draw_Cmd_Type type);
 Tanto_R_Primitive* r_GetCurve(void);
 UniformBuffer* r_GetUBO(void);
 
+extern const uint32_t r_pointsPerPatch;
+extern const uint32_t r_restartOffset;
+
 #endif /* end of include guard: R_COMMANDS_H */
