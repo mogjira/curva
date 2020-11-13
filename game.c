@@ -106,11 +106,11 @@ void g_Init(void)
 
     srandom(5);
     setColor((Vec3){0.1, 0.9, 0.3}, curve.totalPointCount, curve.colors);
-    setRandomLine(200, 0,   0.66, 0.2, curve.positions);
-    setRandomLine(200, 200, 0.33, 0.2, curve.positions);
-    setRandomLine(200, 400, 0.,   0.2, curve.positions);
-    setRandomLine(200, 600,-0.33, 0.2, curve.positions);
-    setRandomLine(200, 800,-0.66, 0.2, curve.positions);
+    //setRandomLine(200, 0,   0.66, 0.2, curve.positions);
+    //setRandomLine(200, 200, 0.33, 0.2, curve.positions);
+    //setRandomLine(200, 400, 0.,   0.2, curve.positions);
+    //setRandomLine(200, 600,-0.33, 0.2, curve.positions);
+    //setRandomLine(200, 800,-0.66, 0.2, curve.positions);
     //setSpiral(curve.totalPointCount, curve.positions);
 }
 
@@ -181,10 +181,10 @@ void g_Update(void)
         incrementIndices();
         mouseDown = false;
     }
-    if ((int)t % 1 == 0) 
-    {
-        activatePoint();
-    }
+    //if ((int)t % 1 == 0) 
+    //{
+    //    activatePoint();
+    //}
     int pc = curve.activePointCount; 
     int ic = curve.activeIndexCount; 
     drawCmdCurves->indexCount = ic;
